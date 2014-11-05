@@ -13,6 +13,11 @@
 //#include <initializer_list> // std::initializer_list
 #include <string>
 
+#include <set>
+#include <map>
+#include <unordered_set>
+#include <list>
+
 using namespace std;
 
 /* not VS yet, Clang/gcc only:
@@ -60,6 +65,79 @@ class PythonStyleRange {
     PythonStyleRangeIterator end() const { return PythonStyleRangeIterator(_end); }
 };
 
+/* TODO
+template <class ElemType>
+class PyFilterResult {
+  public:
+    PyFilterResultIterator<T> begin() {
+    }
+
+    PyFilterResultIterator<T> end() {
+    }
+};
+
+template<class Container, typename ElemType>
+PyFilterResult<ElemType> py_filter(const Container& container, function<bool, ElemType> predicate) {
+  return PyFilterResult(container, predicate);
+}
+*/
+
+// This func explores Python or lodash.js-style filter, map, reduce, so what I want is:
+// int result = elems.filter([](int elem) {
+//   return elem % 2 == 0;
+// })
+// .map([](int elem) {
+//   return elem * 10
+// })
+// .reduce_aka_accumulate((int accu, int elem) => { // note Python3 demoted reduce(), lodash.js still has it
+//   return accu + elem;
+// }, 0); // 0 being initial accu
+// 
+// In other words I want to concat filters & transforms like in http://www.dabeaz.com/generators-uk/GeneratorsUK.pdf
+// slide 59, 
+//    filenames = gen_find("access-log*",logdir)
+//    logfiles = gen_open(filenames)
+//    loglines = gen_cat(logfiles)
+//    patlines = gen_grep(pat,loglines)
+//    bytecolumn = (line.rsplit(None,1)[1] for line in patlines)
+//    bytes = (int(x) for x in bytecolumn if x != '-')
+// I also want lazy eval to deal with infinite input, so I don't want to construct 
+// explicit containers for each processing stage.
+// See http://en.cppreference.com/w/cpp/concept/OutputIterator
+//
+// Shouldnt something like that be part of Boost? Cannot find it atm.
+// Discussed here: http://programmers.stackexchange.com/questions/170464/c11-support-for-higher-order-list-functions
+// and here http://www.meetingcpp.com/tl_files/mcpp/slides/12/FunctionalProgrammingInC++11.pdf
+void functional_filter_map_reduce_playground() {
+
+  /* TODO
+  auto seq0 = PythonStyleRange(0, 100);
+  auto seq1 = py_filter(seq0, [](elem) { return elem % 3 == 0; });
+  auto seq2 = py_map(seq1, [](elem) { return elem * 10; });
+  auto seq3 = py_filter(seq2, [](elem) { return elem + 1; });
+  auto seq4 = py_map(seq3, [](elem) { return string(elem); });
+  auto seq5 = py_splice(seq4, 0, 5);
+  copy_n(seq5.begin(), 10, ostream_iterator<string>(cout, "\n"));
+  */
+}
+
+
+
+struct Foo {
+    void print_sum(int n1, int n2)
+    {
+        std::cout << n1+n2 << '\n';
+    }
+    int data;
+};
+
+void testBind() {
+  using namespace std::placeholders;  // for _1, _2, _3...
+  Foo foo;
+  auto f3 = std::bind(&Foo::print_sum, &foo, 95, _1);
+  f3(5);
+}
+
 void main() {
 
   // From http://en.cppreference.com/w/cpp/utility/initializer_list:
@@ -104,16 +182,9 @@ void main() {
   }
 
   // sort of functional map, just in an awkward & inefficient fashion
-  // what I want instead is 
-  // int result = elems.filter([](int elem) {
-  //   return elem % 2 == 0;
-  // })
-  // .map([](int elem) {
-  //   return elem * 10
-  // })
-  // .reduce_aka_accumulate((int accu, int elem) => { // note Python3 demoted reduce(), lodash.js still has it
-  //   return accu + elem;
-  // }, 0); // 0 being initial accu
+  // Could becomes a single func call if I'd use ostream_iterator, but this still 
+  // doesn't allow you to easily chain multiple iterator/generator processing steps
+  // the way you do with lodash.js or Python list/generator comprehensions.
   {
     vector<int> mappedElems;
     std::transform(elems.begin(), elems.end(), std::back_inserter(mappedElems), [](int elem) {
@@ -124,7 +195,105 @@ void main() {
     });
   }
 
-  // 
+  // containers:
+  // http://john-ahlgren.blogspot.com/2013/10/stl-container-performance.html
 
-  // TODO: <functional> bind
+  // set (and map), with logN insert and find (tree-based, not hash based)
+  // Requires a less-than comparison function
+  // (http://lafstern.org/matt/col1.pdf)
+  {
+    //set<string> cont = { "a", "b" };
+    set<string> cont;
+    cont.insert("bla");
+    auto foo1 = "foo";
+    auto foo2 = "foo";
+    cont.insert(foo1);
+    cont.insert(foo1);
+    cont.insert(foo2);
+    cout << "set contains 'foo'? " << (cont.find("foo") != cont.end())  << endl;
+    for (auto elem : cont)
+      cout << "set elem " << elem << endl;
+  }
+
+  {
+    map<string, int> sToInt;
+    typedef pair<string, int> KeyValuePair;
+    sToInt.insert(KeyValuePair("a", 1));
+    sToInt.insert(KeyValuePair("b", 55));
+    sToInt.insert(KeyValuePair("foo", 99));
+    auto printContains = [=](string elem) {
+      cout << "map contains '" << elem << "'? " << (sToInt.find(elem) != sToInt.end())  << endl;
+    };
+    printContains("foo");
+    printContains("bla");
+    for (auto pair : sToInt)
+      cout << "map elem " << pair.first << " " << pair.second << endl;
+  }
+
+  // multiset: like set but dup keys are allowed, same complexity
+  {
+    multiset<string> cont;
+    cont.insert("bla");
+    auto foo1 = "foo";
+    auto foo2 = "foo";
+    auto foo3 = "foo";
+    cont.insert(foo1);
+    cont.insert(foo1);
+    cont.insert(foo2);
+    cont.find(foo1);
+
+    auto printContains = [=](string elem) {
+      cout << "multiset contains '" << elem << "'? " << (cont.find(elem) != cont.end())  << endl;
+    };
+    printContains(foo1);
+    printContains(foo2);
+    printContains(foo3);
+    for (auto elem : cont)
+      cout << "multiset elem " << elem << endl;
+  }
+
+  // unordered_set and unordered_map (hash tables with O(1) insert & find except when collision)
+  // Requires an equals comparison & hash function I guess
+  {
+    unordered_set<string> cont;
+    // code is 100% the same as for set:
+    cont.insert("bla");
+    auto foo1 = "foo";
+    auto foo2 = "foo";
+    cont.insert(foo1);
+    cont.insert(foo1);
+    cont.insert(foo2);
+    cout << "unordered_set contains 'foo'? " << (cont.find("foo") != cont.end())  << endl;
+    for (auto elem : cont)
+      cout << "unordered_set elem " << elem << endl;
+
+    cout << "same list using ostream_iterator:\n";
+    copy(cont.begin(), cont.end(), ostream_iterator<string>(cout, "\n"));
+  }
+
+  functional_filter_map_reduce_playground();
+
+  // TODO priority_queue with O(1) top and O(logN) pop
+
+  // http://en.cppreference.com/w/cpp/utility/functional/bind
+  // Is this useful at all still when we have lambdas now? Not on the application level I think, 
+  // maybe somewhere in the bowels of STL.
+  {
+    cout << endl << "std::bind\n";
+    multiset<string> cont;
+    auto ins = [&](string s) {
+      cont.insert(s);
+    };
+    cont.insert("bla");
+    ins("foo");
+    ins("bar");
+    /* why doesn't this compile? VS2012 err msgs are messed up. Little incentive to fix it,
+     * C++11 lambda makes bind() borderline useless imo.
+    auto ins_baz = std::bind(&unordered_set<string>::insert, &cont, "baz");
+    ins_baz();
+    ins_baz();
+    */
+    copy(cont.begin(), cont.end(), ostream_iterator<string>(cout, "\n"));
+  }
+  testBind();
 }

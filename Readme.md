@@ -43,10 +43,12 @@ TODO: read Scott Meyers book on STL.
 
 * the C++ iterator representation via begin/end seems more error prone than the Python or JS ones via single iterator 
 object that throws a StopItertion when reaching EOS, since you can accidentally use .
-* is there finally some sort of for $x in $container or foreach in C++11 now? Yes, according to [here](http://en.cppreference.com/w/cpp/language/range-for). Finally!
+* is there finally some sort of 'for $x in $container' or foreach in C++11 now? Yes, according to [here](http://en.cppreference.com/w/cpp/language/range-for). Finally!
 * new in C++11 std::initializer_list
 * C++ equivalent of Python for x in range(begin,end)? Not in core afaik, but can add this efficiently, see 
   PythonStyleRange in ./STL.cpp.
+* great STL container complexity summaries are [here](http://john-ahlgren.blogspot.com/2013/10/stl-container-performance.html) and 
+  [here](http://stackoverflow.com/questions/181693/what-are-the-complexity-guarantees-of-the-standard-containers)
 * functional Python-style map: STL has http://www.cplusplus.com/reference/algorithm/transform/, but sadly the
   output iterator creates an explicit sequence (or can this be circumvented?)
 * C++ equivalents of LINQ or Python or lodash.js filter : I dont see a filter at http://www.cplusplus.com/reference/algorithm/,
@@ -69,6 +71,15 @@ object that throws a StopItertion when reaching EOS, since you can accidentally 
   
 * imo could benefit from generators, and the concept of a Python-style iterator that just has a next() and/or 
   the equivalent of StopIteration (not necessarily impl'd via pretty expensive exception handling)
+
+STL & functional-style programming
+---
+
+Outlined here: http://www.meetingcpp.com/tl_files/mcpp/slides/12/FunctionalProgrammingInC++11.pdf. See also
+STL.cpp's functional_filter_map_reduce_playground(). Out of the box STL does not allow me to do functional-style
+or Python-style list/generator-programming, composing filter() and transform() and reduce/accumulate/fold() calls 
+at will. If it did then this likely would make C++ STL code more readable & optimizable. But I think this could
+be impl'ed as a thin layer on top of STL. TODO?
 
 Still missing features:
 ---

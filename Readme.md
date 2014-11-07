@@ -81,6 +81,16 @@ or Python-style list/generator-programming, composing filter() and transform() a
 at will. If it did then this likely would make C++ STL code more readable & optimizable. But I think this could
 be impl'ed as a thin layer on top of STL. TODO?
 
+I/O libs:
+---
+
+* 0MQ aka [ZeroMQ](http://zeromq.org/) has bindings for multiple platforms, e.g. nodejs
+* boost::asio, unsure about interop with other langugages
+
+Random links:
+* [Going Native 2013](http://channel9.msdn.com/Events/GoingNative/2013)
+* [Going Native 2012](http://channel9.msdn.com/Events/GoingNative/GoingNative-2012)
+
 Still missing features:
 ---
 

@@ -108,6 +108,10 @@ PyFilterResult<ElemType> py_filter(const Container& container, function<bool, El
 // Shouldnt something like that be part of Boost? Cannot find it atm.
 // Discussed here: http://programmers.stackexchange.com/questions/170464/c11-support-for-higher-order-list-functions
 // and here http://www.meetingcpp.com/tl_files/mcpp/slides/12/FunctionalProgrammingInC++11.pdf
+//
+// P.S. more here:
+// * http://paoloseverini.wordpress.com/2014/06/09/generator-functions-in-c/
+// * http://www.boost.org/doc/libs/1_57_0/libs/coroutine/doc/html/index.html
 void functional_filter_map_reduce_playground() {
 
   /* TODO

@@ -86,7 +86,13 @@ Still missing features:
 
 * std::future::then anyone? Got boost::future::then only.
 * it's time for generator yield in C++, sadly not in C++14 yet :( Once we have this we can use it with std::future::then
-  and have async/await in C++ :)
+  and have async/await in C++ :) Some links on this:
+    - I like the generator remarks and discussion of eager vs lazy eval oin STL transform
+      at [this blog entry](http://paoloseverini.wordpress.com/2014/06/09/generator-functions-in-c/)
+    - [boost::coroutine](http://www.boost.org/doc/libs/1_57_0/libs/coroutine/doc/html/index.html) can
+      impl coroutines with standard C++11?!
+    - standardization attempts are [here](http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2013/n3708.pdf), sadly
+      without a yield language keyword
   The closest we have to $generator.send(val) are output iterators?
 * is there finally some sort of nodejs npm or python pypi / pip install for C++14? Dont think so. It's about time! It 
 seems like cross-platform fetching C++ libs via pip install (matplotlib, numpy) or node is npm install (karma) 

@@ -91,19 +91,60 @@ Random links:
 * [Going Native 2013](http://channel9.msdn.com/Events/GoingNative/2013)
 * [Going Native 2012](http://channel9.msdn.com/Events/GoingNative/GoingNative-2012)
 
+Dependency Hell: C++ package managers
+---
+
+Python has pip/pypi, nodejs has npm, why does C++ not have an agreed upon dependency 
+manager yet? Some links:
+
+* http://www.reddit.com/r/cpp/comments/2eiulw/dependency_manager_for_ccmake_projects/
+* http://meetingcpp.com/index.php/vl14/items/21.html (only a summary as of Nov 2014)
+* semi-dead: https://github.com/iauns/cpm - what killed it?
+* semi-dead: pulling C++ libs thru 
+  [nuget: GoingNative 2013](http://channel9.msdn.com/Events/GoingNative/2013/Find-Build-Share-Use-Using-NuGet-for-C-and-Cpp-Libraries).
+  I liked that he reused an existing repo (nuget's), but the choice of nuget probably killed it 
+  as a potential cross-platform solution. 
+* the only working dep mgr I found is [node-gyp](https://github.com/TooTallNate/node-gyp)
+* we use C++ libs stored in a local Artifactory and downloaded via ivy.xml, but this
+  won't scale across companies and pushing the 3rd party C++ libs into Artifactory 
+  is still labor-intensive & awkward.
+
+C++ crossplatform builds
+---
+
+* I like gyp: generates Makefiles or vcproj from a pleasant looking json-ish *.gyp file
+* autoconf: it took me 30+ mins to set up a configure.ac Makefile.am for a helloword 
+  project. Dislike at first sight. I don't like the archaic looking m4 either. Though
+  admittedly for library consumers this is easy to use with ./configure and make. At least
+  on Linux, for Windows users this is not as straightforward.
+* CMake seems to be cross-platform also, did not look as a appealing to me as gyp though
+  at first glance.
+
 Still missing features:
 ---
 
-* std::future::then anyone? Got boost::future::then only.
+* async:
+    - std::future::then anyone? Got boost::future::then only.
+    - executors/schedulers: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2013/n3731.pdf. 
+      There are plenty of variants for this in the making, e.g. https://github.com/chriskohlhoff/executors
+      from the bost::asio author (see also https://www.youtube.com/watch?v=D-lTwGJRx0o)
 * it's time for generator yield in C++, sadly not in C++14 yet :( Once we have this we can use it with std::future::then
   and have async/await in C++ :) Some links on this:
     - I like the generator remarks and discussion of eager vs lazy eval oin STL transform
-      at [this blog entry](http://paoloseverini.wordpress.com/2014/06/09/generator-functions-in-c/)
+      at [this blog entry](http://paoloseverini.wordpress.com/2014/06/09/generator-functions-in-c/), 
+      continued here: http://isocpp.org/blog/2014/06/generator-functions
     - [boost::coroutine](http://www.boost.org/doc/libs/1_57_0/libs/coroutine/doc/html/index.html) can
-      impl coroutines with standard C++11?!
+      impl coroutines with standard C++11?! Built on Duff's Device?
     - standardization attempts are [here](http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2013/n3708.pdf), sadly
-      without a yield language keyword
-  The closest we have to $generator.send(val) are output iterators?
-* is there finally some sort of nodejs npm or python pypi / pip install for C++14? Dont think so. It's about time! It 
-seems like cross-platform fetching C++ libs via pip install (matplotlib, numpy) or node is npm install (karma) 
-simpler than (cross-platform!) building of C++ libs via C++ tools.
+      without a yield language keyword. P.S.: the newer version of this looks much better: 
+      http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2014/n4134.pdf. This now resembles
+      Python asyncio more than earlier drafts had. I still wish the C++ impl could get away with 
+      just yield or 'yield from', without needing the extra 'await' operator. How could we write
+      the event loop then though? In duck-typed languages (Python & nodejs) writing the event loop 
+      that consumes the generator that produced the futures and sends back in the resolved values
+      (or exceptions) is pretty straighforward, but in type-safe C++ we would need the event loop
+      to consume future<T> and send back in the T, with the T being variable for most generators
+      (e.g. a generator yielding first future<shared_ptr<stream>> and then future<int> while
+      finally returning a string).
+      In other words the boost::coroutine would have to be pull_type=future<T> and push_type=T.
+      Unless we go for a non-type-safe & ugly future<variant> solution. 

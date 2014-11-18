@@ -1,0 +1,164 @@
+These are my notes on some initial Kaldi experiments:
+
+I used Kaldi on Centos 7 minimal iso in VMWare player. P.S.: this didn't work out due
+to Centos 7 coming with gcc 4.8.2 which has some nth_element bug in the stdlib. I 
+retried with Ubuntu 14.04 afterwards, which looks more promising & makes installing
+different gcc versions in parallel simpler afaik, see 'Ubuntu' below.
+
+created non-admin account at iso install time
+su -
+visudo, add sudoer
+no ifconfig, use nmtui: enable eth, hostname:=somethingmemorable.localdomain; 
+sudo service network restart (see http://lintut.com/how-to-setup-network-after-rhelcentos-7-minimal-installation/)
+ip addr, then ssh to that ip
+
+EPEL: http://www.tecmint.com/how-to-enable-epel-repository-for-rhel-centos-6-5/
+
+sudo yum -y install vim, hg, svn, git, wget
+
+(For XC only): install java, ant, Python3, ... in various ways (e.g. ./configure; make install)
+
+get Kaldi via svn 
+
+>cd tools; make shows which packages to yum, then downloads all deps, this is
+nicely automated :)
+
+>cd src; ./configure failed with some ATLAS references.
+  Using ATLAS as the linear algebra lib
+  ... no libatlas.so in /usr/lib
+  ... no libatlas.so in /usr/lib/atlas
+  ... no libatlas.so in /usr/lib64/atlas
+
+I had got openblas & atlas (atlas, atlas-devel) from epel via yum, not sure why it kept
+complaining it cannot find atlas. I also see ls /usr/include/atlas/. So why does Kaldi's 
+./configure complain? 
+
+  Using ATLAS as the linear algebra lib
+  ... no libatlas.so in /usr/lib
+  ... no libatlas.so in /usr/lib/atlas
+
+>yum list installed | grep atlas
+atlas.x86_64                      3.10.1-7.el7                         @base
+atlas-devel.x86_64                3.10.1-7.el7                         @base
+atlas-static.x86_64               3.10.1-7.el7                         @base
+
+>yum install yum-utils
+>repoquery --list  atlas
+
+  /usr/lib/atlas
+  /usr/lib/atlas/libsatlas.so.3
+  /usr/lib/atlas/libsatlas.so.3.10
+
+Though strangely when /usr/lib/atlas actually does not exist in the filesytem. 
+
+>find /usr -iname atlas
+
+  /usr/lib64/atlas
+  /usr/include/atlas
+
+>ls /usr/lib64/atlas
+
+  libatlas.a  libsatlas.so  libsatlas.so.3  libsatlas.so.3.10  libtatlas.so  libtatlas.so.3  libtatlas.so.3.10
+
+Oddly Kaldi looks for libatlas.so while yum only installed libsatlas.so. So installing it via Kaldi:
+>cd tools; ./install_atlas.sh
+
+This now fails with some gfortran/f77 err msgs. 
+
+>yum search fortran; sudo yum install gcc-gfortran
+
+This gets further now but still fails:
+
+  cp: cannot stat `/home/kschubert/kaldi-trunk/tools/ATLAS/build/lib/libptcblas.a': No such file or directory
+
+Is this an aftershock from me not bothering to disable CPU throttling? Time to try openblas instead of atlas:
+src/configure  talks about openblas, so 
+>cd tools; make openblas
+(even though I had done yum install openblas earlier I figured make might be the better route for Kaldi)
+
+
+>cd src; ./configure  --openblas-root=../tools/OpenBLAS/install
+
+This worked.Just imagine how much simpler this could have been if C++ had a package manager like nodejs:npm or 
+python:pip :)
+
+But now configure mentions that gcc 4.8.2 is bugged, and I need a different version :(
+
+  *** WARNING: your version of gcc seems to be 4.8.2. ***
+  *** This version of gcc has a bug in nth_element ***
+  *** in its implementation of the standard library ***
+  *** This will cause Kaldi to crash (make test   ***
+  *** should fail). Please either upgrade or downgrade gcc. ***
+
+Installing a new gcc doesn't sound like fun, I cannot simply yum install it afaik, building it yourself 
+presumably takes hours. Might be faster to run Centos 6.5 instead, or to install Ubuntu with its larger
+selection of apt-getable g++ compilers.
+
+
+
+--------------------------------- snip
+
+So repeating the same exercise with ubuntu 14.04 server VM 25 Gb:
+>ifconfig
+>sudo apt-get install openssh-server
+>sudo /etc/init.d/ssh restart; now can ssh from host
+>apt-cache search gcc
+
+From http://stackoverflow.com/questions/13018626/add-apt-repository-not-found, to get add-apt-repository 
+>sudo apt-get install software-properties-common # do I also need python-software-properties ? Probably not.
+
+From http://askubuntu.com/questions/428198/getting-installing-gcc-g-4-9-on-ubuntu
+>--dont--sudo apt-get -y install build-essential ??? this install gcc 4.8.2, which is the bugged one Kaldi doesn't work with
+>sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+>sudo apt-get update
+>sudo apt-get install g++-4.9
+
+Now I get:
+>g++ --version
+  g++ (Ubuntu 4.8.2-19ubuntu1) 4.8.2
+>g++-4.9 --version
+  g++-4.9 (Ubuntu 4.9.2-0ubuntu1~14.04) 4.9.2
+
+cd /usr/bin
+sudo rm gcc g++ cpp
+sudo ln -s gcc-4.9 gcc
+sudo ln -s g++-4.9 g++
+sudo ln -s cpp-4.9 cpp
+
+>g++ --version
+  g++ (Ubuntu 4.9.2-0ubuntu1~14.04) 4.9.2
+
+>g++ -E -x c++ - -v
+  shows it pulls includes from /usr/include/c++/4.9, not the bugged stdlib
+
+>cd tools
+>make
+  suggests:
+>sudo apt-get install  zlib1g-dev automake libtool autoconf libatlas3-base
+>sudo ln -s -f bash /bin/sh
+>make
+
+>make test
+
+Sadly this fails:
+  Running matrix-lib-test .../bin/sh: line 1:  1861 Aborted                 ./$x > /dev/null 2>&1
+  ... FAIL matrix-lib-test
+
+Running the individual tests manually:
+>cds src
+>base/kaldi-error-test
+>matrix/matrix-lib-test >& matrix/matrix-lib-test.log
+
+This shows error details in the log:
+  KALDI_ASSERT: at UnitTestCopyRowsAndCols:matrix-lib-test.cc:302, failed: M(r, c) == v(r)
+
+That's some very basic stuff failing (copying rows out of a matrix), doesn't look promising.
+Maybe I should use a different g++? Or try OpenBLAS instead of Atlas (if Atlas is even 
+involved in this failing test)? These guys here have not the same but a similar problem:
+http://sourceforge.net/p/kaldi/discussion/1355348/thread/67e76dac/: they recommend
+gcc 4.8.3 as a known good version, though this problem seems to be fixed in 4.9 (.0?).
+I temp disabled the matrix tests in src/Makefile to see which other tests are failing also:
+surprisingly none of the other tests fail! Would have thought if something as basic as
+the matrix code fails you'd see many failures downstream.
+
+TODO: get the matrix test to succeed

@@ -26,6 +26,21 @@ Lambda
 ---
 
 Great, finally! Great to have with for_each and such, as well as for futures.
+http://google-styleguide.googlecode.com/svn/trunk/cppguide.html recommends explicit lambda captures, and
+to not used default ones at all.
+
+Auto
+---
+Quote http://google-styleguide.googlecode.com/svn/trunk/cppguide.html: "Programmers have to 
+understand the difference between auto and const auto& or they'll get copies when they didn't mean to."
+When do I get a copy?
+
+
+Initializer lists
+---
+
+Not available in VS2012 yet. See http://google-styleguide.googlecode.com/svn/trunk/cppguide.html for examples,
+as well as http://en.cppreference.com/w/cpp/utility/initializer_list.
 
 Concurrency
 ---
@@ -39,10 +54,9 @@ Good links:
 STL
 ---
 
-TODO: read Scott Meyers book on STL. 
-
 * the C++ iterator representation via begin/end seems more error prone than the Python or JS ones via single iterator 
-object that throws a StopItertion when reaching EOS, since you can accidentally use .
+  object that throws a StopItertion when reaching EOS, since you could accidentally compare x.begin() with y.end().
+  I've seen sequence<T> with (c)begin() (c)end() in some code.
 * is there finally some sort of 'for $x in $container' or foreach in C++11 now? Yes, according to [here](http://en.cppreference.com/w/cpp/language/range-for). Finally!
 * new in C++11 std::initializer_list
 * C++ equivalent of Python for x in range(begin,end)? Not in core afaik, but can add this efficiently, see 
@@ -90,6 +104,10 @@ I/O libs:
 Random links:
 * [Going Native 2013](http://channel9.msdn.com/Events/GoingNative/2013)
 * [Going Native 2012](http://channel9.msdn.com/Events/GoingNative/GoingNative-2012)
+* [Google C++ Style Guide](http://google-styleguide.googlecode.com/svn/trunk/cppguide.html): their EH stance
+  surprised me, they seem to have a lot of non-exception-safe code still. One of the few things that I 
+  disagreed with was the 'and an excessively "functional" style of programming' comment. Some example
+  would have been helpful to illustrate this excessiveness.
 
 Dependency Hell: C++ package managers
 ---

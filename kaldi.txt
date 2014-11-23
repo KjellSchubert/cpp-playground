@@ -177,4 +177,22 @@ Next step: run the equivalent of XCalibur-minitrain with Kaldi, using same input
 ---
 
 This require adapting http://kaldi.sourceforge.net/tutorial_running.html.
-TODO
+I started with:
+
+>cd /kaldi-trunk/egs/rm/s4
+>./getdata.sh
+>train_cmd="run.pl"
+>decode_cmd="run.pl"
+>run.sh | tee run.sh.log
+
+This ran for <30 min and then errored with
+  Error decoding : no WER results found.
+
+Didn't bother investigating yet why it failed, instead I followed a mix of 
+http://kaldi.sourceforge.net/tutorial_running.html and http://kaldi.sourceforge.net/data_prep.html:
+
+>cd egs
+>mkdir minitrain
+>hg clone ...minitrain
+
+TODO: run minitrain with Kaldi, investigate rm/s4 failure

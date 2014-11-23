@@ -132,6 +132,11 @@ struct Foo {
     {
         std::cout << n1+n2 << '\n';
     }
+
+    // add overload to make std::bind more difficult:
+    //void print_sum(const Foo& f) {
+    //}
+
     int data;
 };
 
@@ -156,6 +161,8 @@ void play_with_stl() {
     elems.push_back(6 + i*3);
 
   // range for over container
+  // See http://stackoverflow.com/questions/15927033/what-is-the-correct-way-of-using-c11s-range-based-for
+  // So remember to use for ([const] auto&) when appropriate.
   for (auto elem : elems)
     cout << "ranged for loop: " << elem << endl;
 
@@ -186,7 +193,7 @@ void play_with_stl() {
   }
 
   // sort of functional map, just in an awkward & inefficient fashion
-  // Could becomes a single func call if I'd use ostream_iterator, but this still 
+  // Could become a single func call if I'd use ostream_iterator, but this still 
   // doesn't allow you to easily chain multiple iterator/generator processing steps
   // the way you do with lodash.js or Python list/generator comprehensions.
   {
@@ -291,13 +298,47 @@ void play_with_stl() {
     cont.insert("bla");
     ins("foo");
     ins("bar");
-    /* why doesn't this compile? VS2012 err msgs are messed up. Little incentive to fix it,
-     * C++11 lambda makes bind() borderline useless imo.
-    auto ins_baz = std::bind(&unordered_set<string>::insert, &cont, "baz");
+    // Why doesn't this compile? Both VS2012 & clang 3.5 err msgs seemed pretty
+    // cryptic to me. Turns out mutiset<T>::insert has several overloads, and
+    // you need to explicitly disambiguate between them for std::bind, see
+    // http://stackoverflow.com/questions/17874489/disambiguate-overloaded-member-function-pointer-being-passed-as-template-paramet
+    // So this here doesn't compile:
+    //  auto ins_baz = std::bind(&multiset<string>::insert, std::ref(cont), "baz");
+    // This here does:
+    typedef multiset<string> Cont;
+    typedef Cont::iterator (Cont::*ContInsertFunc)(const std::string&); // disgusting syntax!
+    // See also http://www.oopweb.com/CPP/Documents/FunctionPointers/Volume/CCPP/FPT/em_fpt.html
+    // for this terrible C++ member func ptr syntax.
+    // Also http://stackoverflow.com/questions/4832275/c-typedef-member-function-signature-syntax
+    // See http://stackoverflow.com/questions/16016112/stdbind-of-class-member-function:
+    // '&cont' vs 'cont' vs 'std::ref(cont)'binding: one binds copy, the other binds
+    // the ref.
+    auto ins_baz = std::bind(
+      static_cast<ContInsertFunc>(&Cont::insert), 
+      std::ref(cont), // or just 'cont' or '&cont' (the former will insert into a copy!)
+      "baz");
     ins_baz();
     ins_baz();
-    */
+    
+    // Does C++11 have any better ways to specify member func ptr?
+    // See examples at http://en.cppreference.com/w/cpp/utility/functional/function
+    // Something like this here should have worked but gives me errors:
+    //   std::function<Cont::iterator(Cont&, const string&)> contInsertFunc = &Cont::insert; 
+    // note auto won't work here because insert() is overloaded.
+    // Got little incentive to get this to work since lambdas are so much more 
+    // readable in this overloaded func case.
+    // This here works in the case without overloads:
+    std::function<void(Foo&, int, int)> Foo_print_sum = &Foo::print_sum;
+    Foo foo;
+    Foo_print_sum(foo, 1, 2);
+            
+
+
+    // C++11 lambda makes bind() borderline useless imo. But see
+    // http://stackoverflow.com/questions/6868171/c0x-lambda-wrappers-vs-bind-for-passing-member-functions
+    cout << "final content of cont:\n";
     copy(cont.begin(), cont.end(), ostream_iterator<string>(cout, "\n"));
+    cout << "--end cont\n";
   }
   testBind();
 }

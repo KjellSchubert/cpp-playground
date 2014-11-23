@@ -16,10 +16,12 @@
             'type': 'executable',
             'cflags': [ '-g', '-O0', '-std=c++11' ],
             'sources': [
+                'src/cpp11.cpp',
                 'src/main.cpp',
                 'src/move.cpp',
                 'src/stl.cpp',
                 'src/threading.cpp',
+                'src/variadic_template_func.cpp',
             ],
             'libraries': [
                 '-lpthread'

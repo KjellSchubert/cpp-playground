@@ -142,7 +142,7 @@ void testBind() {
   f3(5);
 }
 
-void main() {
+void play_with_stl() {
 
   // From http://en.cppreference.com/w/cpp/utility/initializer_list:
   // not not VS2012 yet: std::vector<int> elems = { 6, 9, 12, 15};

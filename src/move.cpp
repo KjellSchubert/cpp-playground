@@ -3,6 +3,10 @@
 // http://en.cppreference.com/w/cpp/language/move_constructor
 // http://blogs.msdn.com/b/xiangfan/archive/2012/02/03/c-98-gt-c-11-pass-by-value-or-pass-by-reference.aspx
 // http://stackoverflow.com/questions/24543330/when-is-const-reference-better-than-pass-by-value-in-c11
+//
+// http://google-styleguide.googlecode.com/svn/trunk/cppguide.html suggests:
+//   "Use rvalue references only to define move constructors and move assignment
+//    operators. Do not use std::forward."
 
 #include <iostream>
 #include <vector>
@@ -13,6 +17,8 @@
 #include <string>
 
 using namespace std;
+
+namespace {
 
 // example class for testing move c'tors, not doing anything useful
 class A {
@@ -103,6 +109,7 @@ class A {
 int A::moveCount = 0;
 int A::copyCount = 0;
 
+}
 
 int func_argByValue(const A a) {
   return a.f();
@@ -133,7 +140,7 @@ int fOverloaded(const A&& a) {
   return a.f();
 }
 
-void main() {
+void play_with_move() {
 
   cout << "\nexample A ctor\n";
   {

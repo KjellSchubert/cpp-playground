@@ -51,7 +51,7 @@ class ProducerConsumer {
     std::condition_variable conditionVariable;
 };
 
-void main() {
+void play_with_threading() {
   {
     vector<thread> threads;
     for (int i=0; i<5; ++i)

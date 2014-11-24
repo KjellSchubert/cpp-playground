@@ -26,12 +26,30 @@ public:
     return foo(s);
   }
 
-  void voidfunc(int) { }
+  void voidfunc(int val) { 
+    cout << "Foo::voidfunc " << val << endl;
+  }
 };
 
-void global_voidfunc(int) {
+void global_voidfunc(int val) {
+  cout << "global_voidfunc " << val << endl;
 }
 
+// These using decls work fine at global/namespace scope, but not
+// function scope (clang 3.5). Really?
+//template<class T> using MyAlloc = std::allocator<T>;
+//template<class T> using VecWithAlloc = vector<T, MyAlloc<T>>;
+
+}
+
+namespace PlayWithDelete {
+
+  // from http://stackoverflow.com/questions/12877546/how-do-i-avoid-implicit-casting-on-non-constructing-functions-c 
+  void function(int); // this will be selected for int only
+
+  template <class T>
+  void function(T) = delete; // C++11 
+  // TODO
 }
 
 void play_with_cpp11() {
@@ -50,6 +68,47 @@ void play_with_cpp11() {
         vector<int> xs {8, 9};
     };
     Bar bar;
+  }
+
+  // uniform initialization via {}
+  // This makes C++'s confusing plethora of way to initialize values more uniform,
+  // and also solves 'most vexing parse' (which was 'fixable' via confusing 
+  // paren before, the initializer fix I like better)
+  // Great summary here: http://mbevin.wordpress.com/2012/11/16/uniform-initialization/
+  {
+    class A {
+    public:
+      A() {}
+      explicit A(int x) {}
+      A(int x, string s) {}
+    };
+
+    // look at the old ways to init vars:
+    int x1=5;
+    int x2(5); // direct-initialization
+    assert(x2 == 5);
+    A a1(5);
+    A a2(5, "hi");
+    A a3(); // this is a function decl, Clang warns '[-Wvexing-parse]', good
+    A a4; // this is an A
+    static_assert(std::is_function<decltype(a3)>::value, "");
+    static_assert(std::is_same<decltype(a4), A>::value, "");
+    // also see 'most vexing parse' issue solved by this.
+
+    // new uniform ways:
+    int x100 {5};
+    int x101 = {5}; // the fact that '=' is optional makes it less uniform... best omit =
+    A a100 {5};
+    //A a101 = {5}; // error: chosen constructor is explicit in copy-initialization, good
+    A a102 {5, "hi"};
+    A a103 = {5, "hi"};
+    A a104 {};
+    std::vector<int> v {1, 4};
+    std::array<int,2> a {1, 4};
+    // now here it gets so beautiful it makes my eyes water, this is
+    // as concise as Python dict() {} init, or JS {} object/map/dict init:
+    std::unordered_map<int,string> m1 { {0,"zero"}, {1,"one"}, {2,"two"} };
+    std::unordered_map<int,A> m2 { {0,{5, "hi"}}, {1,a103}, {2,{}} };
   }
 
   // initializer lists:
@@ -86,15 +145,54 @@ void play_with_cpp11() {
   }
 
   // array<T>
+  // What advantages does this have over C-style arrays (besides obviously 
+  // resembling similar containers like std::vector more)?
+  //   * polymorphic arrays: cannot as easily pass B[] to func(A[]) anymore
+  //   * avoids the imo ugly C++ syntax for C arrays (with 'B bs[5]' instead 'B[5] bs')
+  // See http://stackoverflow.com/questions/6111565/now-that-we-have-stdarray-what-uses-are-left-for-c-style-arrays
+  // Huge array<T> would live on the stack and could cause stackoverflow?
   {
     cout << "play_with_cpp11 array\n";
     std::array<int,3> myarray = {10, 20, 30};
     assert(myarray[1] == 20);
+
+    // polymorphic array
+    class A {};
+    class B : public A {};
+    {
+      B bs[3]; // = {...}
+      auto funcTakingAs = [](A as[3]) { /* likely crash here when called with B[] */ };
+      funcTakingAs(bs);
+    }
+
+    // the same does not compile with array<T>:
+    {
+      array<B,3> bs; // = {}
+      auto funcTakingAs = [](const array<A,3>& as) {};
+      auto funcTakingBs = [](const array<B,3>& bs) {};
+      //funcTakingAs(bs); // doesn compile, good!
+      funcTakingBs(bs);
+    }
+
+    // one (minor?) advantage of the C-style array decl syntax was that it would
+    // auto-count the size, so you could 'int ints[] = {1,2,3}'. In contrast
+    // std::array will auto-init with default value.
+    // See also http://stackoverflow.com/questions/12750265/what-is-the-default-value-of-a-char-array-in-c/12750525#12750525
+    // especially the char foo[N] = {0}; comment (which indicates C-style arrays
+    // will also be init'ed when using this new intializer syntax)
+    array<int, 3> ints = {1,2};
+    assert(ints[2] == 0);
+    //array<int, 3> ints_too_many = {1,2,3,4}; // won't compile, good!
   }
+
+  // http://stackoverflow.com/questions/12877546/how-do-i-avoid-implicit-casting-on-non-constructing-functions-c
 
   // type_traits
   {
-    // these traits are more likely to be used in templates I guess, but whatver,
+    // Note that std::is_same could be impl'd in the past easily with a handfull
+    // of template<T,U> code, see .
+    // It's still great that this was standardized now.
+    // These traits are more likely to be used in templates I guess, but whatver,
     // here some tests:
     
     // first runtime assert (which could & should be static_assert)
@@ -225,5 +323,97 @@ void play_with_cpp11() {
   // code bloat?
   {
     // TODO
+  }
+
+  // template alias, from n1489. Or in general type alias.
+  // This has two uses:
+  //  a) bind some template params, e.g. the Allocator on an container (Vec<T> example)
+  //     (only if the T is fixed you could use typedef instead, so not within
+  //     a template decl itself)
+  //  b) typedef a template alias, e.g. make MyContainer<T> := std::vector<T>
+  // See http://stackoverflow.com/questions/10747810/what-is-the-difference-between-typedef-and-using-in-c11
+  // and http://en.cppreference.com/w/cpp/language/type_alias
+  {
+    // template typedef, with all template params bound
+    typedef vector<int> IntVec;
+    auto elems = IntVec {3,4};
+    assert(elems.size() == 2);
+
+    // same typedef but via 'using' template alias
+    using IntVec2 = vector<int>;
+    auto elems2 = IntVec {3,4};
+    assert(elems2.size() == 2);
+    static_assert(std::is_same<IntVec, IntVec2>::value, "");
+    static_assert(std::is_same<IntVec, vector<int>>::value, "");
+
+    // now binding the allocator via 'using'
+    // (from http://en.cppreference.com/w/cpp/language/type_alias)
+#if !__has_feature(cxx_alias_templates)
+#error "error: !__has_feature(cxx_alias_templates)"
+#endif
+    // Surprisingly I could not define a template alias at function
+    // scope directly. Really?
+    // So this doesn't work:
+    //   template<class T> using MyAlloc = std::allocator<T>;
+    //   template<class T> using VecWithAlloc = vector<T, MyAlloc<T>>;
+    // These lines do compile outside a function scope though.
+    // This here works also (in class scope):
+    class Something {
+      public:
+        template<class T> using MyAlloc = std::allocator<T>;
+        template<class T> using VecWithAlloc = vector<T, MyAlloc<T>>;
+    };
+    Something::VecWithAlloc<int> v {6,7};
+    assert(v.size() == 2);
+
+    // now decl a function (ptr) type via 'using'
+    {
+      typedef void (*MyFunc1)(int); // ugly syntax for func ptr
+      using MyFunc2 = void(&)(int); // less ugly & equivalent? P.S. that a ref, not a ptr
+      // odd here: you can assign either the func name or its address (&func)
+      MyFunc1 func1 = global_voidfunc;
+      MyFunc2 func2 = global_voidfunc;
+      // not the same?! static_assert(std::is_same<MyFunc1, MyFunc2>::value, "");
+    
+      // both behave approx the same, but you cannot reassign a value
+      // to func2. Surprising!
+      func1 = &global_voidfunc;
+      //  func2 = &global_voidfunc; // this won't compile, odd. P.S.: not odd
+
+      // P.S.: they dont behave the same since MyFunc2 is a ref to a function
+      // and not a ptr to one. Here's a pointer to one:
+      //
+      using MyFunc3 = void(*)(int); // less ugly & equivalent?
+      MyFunc3 func3 = global_voidfunc;
+      func3 = &global_voidfunc;
+      static_assert(std::is_same<MyFunc1, MyFunc3>::value, ""); // same after all :)
+
+      // this syntax does not work (it oddly works in the 'using'
+      // expression but not in the assignement.
+      //using MyFunc4 = void(int);
+      //MyFunc4 func4 = global_voidfunc;
+
+      func1(7);
+      func2(7);
+      func3(7);
+    }
+
+    // type alias for raw_ptr, again oddly doesn't compile at function scope
+    // but only class or global scope.
+    class Stuff {
+      public:
+      template<class T> using raw_ptr = T*; 
+    };
+    Stuff::raw_ptr<int> x = static_cast<int*>(nullptr);
+
+    // So for example with pair<a,b> bind one of the template args,
+    // same as allocator example. Again only works at global scope.
+    class Stuff2 {
+      public:
+      template <typename T> using NamedValue = std::pair<string, T>;
+    };
+
+    auto elem1 = Stuff2::NamedValue<int>("twentyfive", 25);
+    assert(elem1.second == 25);
   }
 }

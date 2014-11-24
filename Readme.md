@@ -109,6 +109,7 @@ Random links:
   disagreed with was the 'and an excessively "functional" style of programming' comment. Some example
   would have been helpful to illustrate this excessiveness.
 * https://ascend4nt.wordpress.com/2012/12/28/c-11-must-have-books/
+* [CERT C++ Coding Standard](https://www.securecoding.cert.org/confluence/pages/viewpage.action?pageId=637)
 
 Dependency Hell: C++ package managers
 ---

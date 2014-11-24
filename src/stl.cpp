@@ -5,6 +5,7 @@
 // http://stackoverflow.com/questions/24543330/when-is-const-reference-better-than-pass-by-value-in-c11
 
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <iterator> // std::back_inserter
 #include <functional> // std::plus
@@ -12,7 +13,7 @@
 #include <cassert> // assert
 //#include <initializer_list> // std::initializer_list
 #include <string>
-
+#include <iomanip>
 #include <set>
 #include <map>
 #include <unordered_set>
@@ -341,4 +342,28 @@ void play_with_stl() {
     cout << "--end cont\n";
   }
   testBind();
+
+  // ifstream/ofstream
+  {
+    // Whats a decent way to deal with encodings in C++?
+    // See http://stackoverflow.com/questions/1274910/does-wifstream-support-different-encodings
+    // So ICU does not play nicely with std:: streams?
+    // Boost has UTF8 facet: http://www.boost.org/doc/libs/1_39_0/libs/serialization/doc/codecvt.html
+    // The facet stuff seems a bit verbose to me, and the 'Set a New global locale' is not
+    // gonna play well in multithreaded programs :(
+    // In any case the boost class made it into std.
+    // Copied from http://en.cppreference.com/w/cpp/locale/codecvt :
+    
+    // UTF-8 narrow multibyte encoding
+    std::string data = u8"z\u00df\u6c34\U0001f34c";
+    std::ofstream("text.txt") << data;
+
+    std::wifstream fin("text.txt");
+    fin.imbue(std::locale("en_US.UTF-8"));
+    std::cout << "The UTF-8 file contains the following UCS4 aka utf32 code points: \n";
+    for (wchar_t c; fin >> c; )
+       std::cout << "U+" << std::hex << std::setw(4) << std::setfill('0') << c << '\n';
+
+    // note that C++11 introduces http://en.cppreference.com/w/cpp/locale/codecvt_utf8
+  }
 }

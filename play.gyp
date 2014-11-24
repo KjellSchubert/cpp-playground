@@ -17,6 +17,7 @@
             'cflags': [ '-g', '-O0', '-std=c++11' ],
             'sources': [
                 'src/cpp11.cpp',
+                'src/locale.cpp',
                 'src/main.cpp',
                 'src/move.cpp',
                 'src/stl.cpp',

@@ -8,6 +8,7 @@
 #include <typeinfo> // for typeid() results (RTTI)
 #include <utility> // std::declval
 #include <vector>
+#include <map>
 #include <unordered_map>
 #include <algorithm>
 #include <tuple>
@@ -45,11 +46,32 @@ void global_voidfunc(int val) {
 namespace PlayWithDelete {
 
   // from http://stackoverflow.com/questions/12877546/how-do-i-avoid-implicit-casting-on-non-constructing-functions-c 
-  void function(int); // this will be selected for int only
+  void function(int) {} // this will be selected for int only
 
   template <class T>
   void function(T) = delete; // C++11 
-  // TODO
+
+  void play() {
+    function(123); // this is supposed to compile
+    //function('x'); // this is not, clang says "error: call to deleted function 'function'"
+  }
+}
+
+namespace {
+  class CopyCounted {
+    public:
+      // impl these only to count number of copies
+      CopyCounted() {}
+      CopyCounted(const CopyCounted& a) {
+        ++copy_count;
+      }
+      CopyCounted& operator=(const CopyCounted& rhs) {
+        ++copy_count;
+        return *this;
+      }
+      static int copy_count;
+  };
+  int CopyCounted::copy_count = 0;
 }
 
 void play_with_cpp11() {
@@ -70,7 +92,7 @@ void play_with_cpp11() {
     Bar bar;
   }
 
-  // uniform initialization via {}
+  // uniform initialization via {}, Scott Meyers prefers to call it brace initialization.
   // This makes C++'s confusing plethora of way to initialize values more uniform,
   // and also solves 'most vexing parse' (which was 'fixable' via confusing 
   // paren before, the initializer fix I like better)
@@ -109,6 +131,66 @@ void play_with_cpp11() {
     // as concise as Python dict() {} init, or JS {} object/map/dict init:
     std::unordered_map<int,string> m1 { {0,"zero"}, {1,"one"}, {2,"two"} };
     std::unordered_map<int,A> m2 { {0,{5, "hi"}}, {1,a103}, {2,{}} };
+
+    // Also see http://vimeo.com/97318797 34:00 for narrowing conversions:
+    A a10(2.5f); // implicit narrowing, kinda ugly
+    A a11{static_cast<int>(2.5f)}; // won't compile without cast, good
+
+    // subtle cases where brace initialization & C++98 ctor call syntax choose/prefer
+    // different ctors (from http://vimeo.com/97318797 37:00):
+    auto v1 = vector<int>(100, 5); // parens, chooses vector(int size, T val) ctor
+    auto v2 = vector<int>{100, 5}; // braces, chooses vector(initializer_list) ctor
+    assert(v1.size() == 100);
+    assert(v2.size() == 2);
+  }
+
+  // auto
+  // http://vimeo.com/97318797 @ 3:45 Scott Meyers suggests to prefer auto
+  // for readability's sake, avoid unnecessary redundancy. Same reasoning 
+  // as C# var. Good example for auto countainer.size() at 7:30.
+  // At 9:00 good example for a hidden & surprising copy you get w/o auto.
+  // At 15:00 good example for closure inlining guaranteed(?) by auto.
+  {
+    std::map<string, CopyCounted> m { {"hi", {}}, {"sup", {}} };
+    CopyCounted::copy_count = 0;
+    for (const std::pair<string, CopyCounted>& pair : m) {
+      // do something
+    }
+    assert(CopyCounted::copy_count==2);
+
+    // now same without unnecessary copies & explicit typing
+    // Note the key type is const now.
+    CopyCounted::copy_count = 0;
+    for (const std::pair<const string, CopyCounted>& pair : m) {
+      // do something
+    }
+    assert(CopyCounted::copy_count==0);
+
+    // now the same with auto, much simpler:
+    CopyCounted::copy_count = 0;
+    for (const auto& pair : m) {
+      // do something
+    }
+    assert(CopyCounted::copy_count==0);
+
+    // this is http://vimeo.com/97318797 19:30: mix of auto & brace initializer
+    // is a bit unintuitive:
+    // So careful with mixing auto type deduction & {} uniform initialization
+    auto surprise {5};
+    static_assert(!std::is_same<decltype(surprise), int>::value, "");
+    static_assert(std::is_same<decltype(surprise), initializer_list<int>>::value, "");
+
+    // http://vimeo.com/97318797 22:00: proxy type problems, e.g. with the
+    // (deprecated?) vector<bool>
+    std::vector<bool> boolvec {true, false};
+    bool val = boolvec[1];
+    auto val_sort_of = boolvec[1];
+    assert(val == false);
+    assert(val_sort_of == false);
+    static_assert(!std::is_same<decltype(val_sort_of), bool>::value, "");
+    // at 27:00 in the video he has an example where auto results in
+    // holding on to a dangling ptr (with temporary vector<bool> in play).
+    // A minor concern for auto imo.
   }
 
   // initializer lists:
@@ -319,6 +401,7 @@ void play_with_cpp11() {
   // This is the basic for std::tuple, and at Wikipedia they list a printf
   // use case. Anyone see any other use case? The tuple one alone
   // is probably worth the hassle.
+  // P.S.: this is also the base for the new std::function, std::mem_fn.
   // I'm unsure about the printf use case, doesn't this cause excessive
   // code bloat?
   {
@@ -415,5 +498,83 @@ void play_with_cpp11() {
 
     auto elem1 = Stuff2::NamedValue<int>("twentyfive", 25);
     assert(elem1.second == 25);
+  }
+
+  // std::function vs std::mem_fn (and deprecated std::mem_fun) vs .* and ->*
+  // func ptr sytax playground
+  {
+    // Store a ptr to Foo::foomember const string& -> float
+    Foo foo1;
+    Foo* foo1ptr { &foo1 };
+    typedef float (Foo::*funcptr1_t)(const string&);
+    funcptr1_t memfuncptr1 = &Foo::foomember;
+    // See also http://www.newty.de/fpt/fpt.html for mem func ptr syntax,
+    // which is ugly syntax imo.
+    float x1 = (foo1.*memfuncptr1)("hi");
+    float x2 = (foo1ptr->*memfuncptr1)("hi");
+
+    // now try the same thing with std::function, which is much
+    // more readable than this cryptic .* and ->* operator:
+    // Note initially I forgot & after Foo, which sort of worked, but poorly.
+    std::function<float(Foo&,const string&)> funcptr2 = &Foo::foomember;
+    float x3 = funcptr2(foo1, "hi");
+
+    // why is there std::mem_fn, isn't this redundant since std::function 
+    // alrdy can store pointers to members?
+    // Also note that C++98's std::mem_fun is deprecated! See 
+    // http://stackoverflow.com/questions/11680807/stdmem-fun-vs-stdmem-fn
+    auto funcptr3 = std::mem_fn(&Foo::foomember);
+    float x4 = funcptr3(foo1, "hi");
+
+    // or just using auto to hide the mem func type altogether, but then
+    // you'll have to use .* or ->* operators:
+    auto funcptr4 = &Foo::foomember;
+    // doesn't compile: float x5 = funcptr4(foo1, "hi");
+    float x5 = (foo1.*funcptr4)("hi");
+
+    // this doesn't compile btw: 
+    //   float(Foo,const string&) funcptr5;
+   
+    // and compare with 'using' syntax to typedef a func ptr type:
+  
+    using funcptr6_t = float (Foo::*)(const string&);
+    funcptr6_t funcptr6 = &Foo::foomember;
+    float x6 = (foo1.*funcptr6)("hi");
+
+    // This doesn't compile:
+    //   using funcptr5_t = float (*)(Foo,const string&);
+    //   funcptr5_t funcptr5 = &Foo::foomember;
+    // Clang says it cannot init the free func with a member func.
+    // Luckily std::function can unify the syntax of these.
+  
+    // now functor assigned to function:
+    // Functors are less important now that we have lambda, but we have
+    // legacy functors:
+    class Functor {
+      public:
+      // note I initially had Foo& f, but this wouldn't compile
+      // P.S.: it didn't compile because I had messed up the signature
+      // of funcptr2, now it does.
+      float operator()(Foo& f, const string& s) { return 7; }
+    };
+    Functor functor {};
+    float x8 = functor(foo1, "hi");
+    funcptr2 = functor;
+    
+    // And test some conversions between these equivalent func types:
+    funcptr2 = memfuncptr1; // std::function assigned from mem fun ptr
+    // reverse doesnt compile:
+    //   memfuncptr1 = funcptr2; // mem fun ptr from std::function
+    funcptr2 = funcptr3; // function<> from mem_fn<>
+    // reverse doesn't compile:
+    //   funcptr3 = funcptr2;
+    funcptr2 = funcptr6; // function from mem ptr in 'using' type alias
+    funcptr2 = [](Foo& f, const string& s) -> float { return 0; }; // function<> from lambda
+  }
+
+  // C++14 variable templates (not to be confused with variadic templates)
+  // See usecase PI<float>, PI<double>.
+  {
+    // TODO
   }
 }

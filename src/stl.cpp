@@ -289,7 +289,8 @@ void play_with_stl() {
 
   // http://en.cppreference.com/w/cpp/utility/functional/bind
   // Is this useful at all still when we have lambdas now? Not on the application level I think, 
-  // maybe somewhere in the bowels of STL.
+  // maybe somewhere in the bowels of STL. See also http://vimeo.com/97318797
+  // 16:40 making fun of bind.
   {
     cout << endl << "std::bind\n";
     multiset<string> cont;

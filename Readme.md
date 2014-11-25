@@ -110,6 +110,7 @@ Random links:
   would have been helpful to illustrate this excessiveness.
 * https://ascend4nt.wordpress.com/2012/12/28/c-11-must-have-books/
 * [CERT C++ Coding Standard](https://www.securecoding.cert.org/confluence/pages/viewpage.action?pageId=637)
+* http://vimeo.com/97318797 as a preview to the (as of end 2014) upcoming C++11/14 Scott Meyers book
 
 Dependency Hell: C++ package managers
 ---

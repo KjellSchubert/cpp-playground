@@ -213,6 +213,15 @@ void play_with_stl() {
   // set (and map), with logN insert and find (tree-based, not hash based)
   // Requires a less-than comparison function
   // (http://lafstern.org/matt/col1.pdf)
+  // BTW: I always found it odd that the STL gave the tree-based impl the shorter
+  // name, and the hash-based (unordered_set/map) one the longer name. Since most
+  // of the time you want the hash-based impl, which tends to be faster for the 
+  // average language & usecase, e.g. see pypi:rbtree being slower than dict()
+  // and Java http://stackoverflow.com/questions/1463284/hashset-vs-treeset. Is
+  // the same true for C++? My guess yes, but I didnt benchmark enough use cases
+  // to be 'sure'.
+  // You definitely want std::set/map when you have to keep your container sorted
+  // at all times (a requirement which I rarely needed).
   {
     //set<string> cont = { "a", "b" };
     set<string> cont;

@@ -14,7 +14,21 @@
     {
         'target_name': 'play',
             'type': 'executable',
-            'cflags': [ '-g', '-O0', '-std=c++11' ],
+            'cflags': [ 
+               '-g', 
+               '-O0',
+
+               # optionally pick a sanitizer:
+               # Note this requires 'uname -p' == x86_64, see 
+               # http://llvm.org/releases/3.5.0/tools/clang/docs/MemorySanitizer.html
+               #'-fsanitize=memory', 
+
+               # pick either standard (#if will exclude features from compile):
+               #'-std=c++11'
+               #'-std=c++14' should have worked for clang 3.5 but didnt
+               '-std=c++1y'
+               #'-std=c++1z
+            ],
             'sources': [
                 'src/cpp11.cpp',
                 'src/locale.cpp',

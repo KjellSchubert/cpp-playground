@@ -186,6 +186,39 @@ void play_with_cpp11() {
     assert(result == "hello world");
   }
 
+  // initializer_list:
+  {
+    vector<int> xs {8, 9};
+    assert(xs.size() == 2);
+
+    // http://stackoverflow.com/questions/3250123/what-would-a-stdmap-extended-initializer-list-look-like
+    unordered_map<int, string> i2s {
+      make_pair(2, "two"),
+      make_pair(3, "three")
+    };
+    // or even shorter:
+    i2s = {
+      {2, "two"},
+      {4, "four"}
+    };
+    assert(i2s[2] == "two");
+
+    // and using initializer_list for your own types:
+    class Baz {
+      public:
+        Baz(const std::initializer_list<int>& elems) {
+          assert(elems.size() == 2);
+          sum = std::accumulate(elems.begin(), elems.end(), 0, std::plus<int>());
+        }
+        int sum;
+    };
+    Baz baz {6, 7};
+    Baz baz2 = {8, 9};
+    assert(baz2.sum == 17);
+    // also see http://en.cppreference.com/w/cpp/utility/initializer_list for
+    // using initializer_list outside of c'tors
+  }
+
   // auto
   // http://vimeo.com/97318797 @ 3:45 Scott Meyers suggests to prefer auto
   // for readability's sake, avoid unnecessary redundancy. Same reasoning 
@@ -279,40 +312,180 @@ void play_with_cpp11() {
     for (auto iter = foo.begin(), end = foo.end(); iter != end; ++iter)
       sum += *iter;
     assert(sum == 7);
-
   }
 
-  // initializer lists:
+  // lambda aka closure:
+  // These make functors (class with operator()) a lot less prominent in C++,
+  // awesome! Since functors are kinda verbose. Besides plenty of other languages
+  // have lambdas, lack of these in C++ was a turn-off.
+  //
+  // Initially I found the syntax for lambdas off-putting & ugly, but I luckily 
+  // quickly got used to it. No matter how funky the syntax: lambda is a vastly
+  // important language feature to curb code verbosity, no matter the language:
+  // it's critical for:
+  //   * Javascript: var fun = function(arg) { return arg+1; };
+  //   * Python: fun = lambda x: x+1
+  //       (note Python only allows expressions in lambdas, no statements, and
+  //       note that generator&list expressions in Python took the edge off the
+  //       lack of lambda for a long time)
+  //   * Java: who cares
+  //   * C#: var fun = (int arg) => { return arg+1; }
+  //   * C++: auto fun = [](int arg) { return arg+1; };
+  // So the C++ syntax is actually very similar to JS, with '[]' instead of
+  // 'function'. This syntax is fine with me. Where it gets ugly imo is binding
+  // instructions within the [], which need to accomodate C++'s value vs ref
+  // semantics. Here some simpler examples first:
   {
-    vector<int> xs {8, 9};
-    assert(xs.size() == 2);
+    // simplest example
+    auto f1 = [](int arg) { return arg+1; };
+    assert(f1(7) == 8);
 
-    // http://stackoverflow.com/questions/3250123/what-would-a-stdmap-extended-initializer-list-look-like
-    unordered_map<int, string> i2s {
-      make_pair(2, "two"),
-      make_pair(3, "three")
+    // emulate x++ aka post-increment:
+    auto postIncrement = [](int &arg) {
+      int retval = arg;
+      ++arg;
+      return retval;
     };
-    // or even shorter:
-    i2s = {
-      {2, "two"},
-      {4, "four"}
-    };
-    assert(i2s[2] == "two");
+    int val = 7;
+    assert(postIncrement(val) == 7);
+    assert(val == 8);
 
-    // and using initializer_list for your own types:
-    class Baz {
-      public:
-        Baz(const std::initializer_list<int>& elems) {
-          assert(elems.size() == 2);
-          sum = std::accumulate(elems.begin(), elems.end(), 0, std::plus<int>());
+    // example with explicit retval spec. This is rarely necessary, e.g. it is
+    // mostly when the automatically deduced retval is T but you want T&.
+    // Example: emulate pre-increment aka ++x
+    // Note the explicit retval type specifier as int& (which would be deduced
+    // as plain int otherwise).
+    auto preIncrement = [](int &arg) -> int& {
+      ++arg;
+      return arg;
+    };
+    val = 7;
+    int& valRef = preIncrement(val);
+    assert(valRef == 8);
+    assert(val == 8);
+  }
+  {
+    int stuff {7}; // uniform init looks pretty funky here (where's the default from)
+    assert(stuff == 7);
+    int otherStuff {9};
+
+    // now some examples with closure capture specs:
+    // So by default a C++ closure captures no variable in function scope. This
+    // here yields with clang:
+    // error: variable 'stuff' cannot be implicitly captured in a lambda with no capture-default
+    //auto f1 = [](int val) { return val + stuff; };
+    //
+    // Note that in pretty much all other langs that have lambda the closure 
+    // captures the local context automatically & implicitly (Python, JS, C#), so
+    // the concept of explicit capturing of local vars seems a bit alien to me.
+    // But this was needed because of C++'s value vs ref semantics, which none of 
+    // these other languages have to worry about (not explicitly). Actually C# has
+    // ref T func params, but wasnt that only applicable for builtins? Thus simpler.
+    auto f2 = [stuff, otherStuff](int arg) { // captures these 2 local vars explicitly
+      return arg + stuff;
+      // otherStuff was tagged as captured, but is really unsed, no problem
+    };
+    assert(f2(3) == 10);
+
+    // You can also capture individual vars by reference, and can mix & match 
+    // capture by ref and by value.
+    // One thing I keep confusing: does the '&' belong before or after the 
+    // variable name... It's before. Making it look like we're capturing the address of
+    // the variable.
+    auto f3 = [&stuff, &otherStuff](int arg) {
+      int retval = arg + stuff;
+      stuff = 77; // only has impact becuase of capture by ref
+      return retval;
+    };
+    assert(f3(3) == 10);
+    assert(stuff = 77);
+
+    // WARNING: capturing local vars by reference is a recipe for disaster if
+    // the lifetime of the closure extends the lifetime of the block the closure
+    // is defined in! This is as dangerous as a returning local variable by
+    // reference in regular C++ functions!
+    {
+      struct A {
+        ~A() {
+          cout << "A::~A\n";
+          wasDestructed = true; 
         }
-        int sum;
-    };
-    Baz baz {6, 7};
-    Baz baz2 = {8, 9};
-    assert(baz2.sum == 17);
-    // also see http://en.cppreference.com/w/cpp/utility/initializer_list for
-    // using initializer_list outside of c'tors
+        bool wasDestructed = false;
+      };
+      std::function<float(int, int)> func;
+      {
+        A a;
+        func = [&a](int x, int y) -> int {
+          if (a.wasDestructed) { // undefined behavior here!
+            cout << "WARNING: closure operated on dangling ptr!\n";
+            return -1; // just for testing, ridiculous code of course
+          }
+          return x + y;
+        };
+      }
+      // at this point we had A destructed alrdy.
+      assert(func(3,4) == -1); // operated on a destructed obj, behavior is undefined 
+                            // of course.
+    }
+
+    // Instead of capturing individual vars you can capture everything, either
+    // via [=] or [&], which capture all local vars by value or ref respectively.
+    // WARNING: this syntax is not recommended, e.g. the Google style code advises
+    // to capture individual vars explicitly. I personally don't mind [=] to much
+    // as long as doesnt capture pointers but only values that will be copy-constructed
+    // (deep cloned!) by the closure. 
+    stuff = 7;
+    auto f5 = [=](int val) { return val + stuff; };
+    assert(f5(3) == 10);
+
+    // Another important aspect of capture is when does the act of capture actually
+    // happen. It happens when the closure is declared, means if you captured by
+    // value and change the variable later on then the closer will keep seeing the
+    // old captured value:
+    stuff = 7;
+    auto f6 = [stuff](int x) { return stuff + x; };
+    stuff = 100;
+    assert(f6(0) == 7); // not 100!
+  }
+  {
+    // C++14 changes/enhancements to lambda, Generalized Lambda-capture.
+    // See http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2013/n3648.html
+    // The only use case of these change imo should be to allow for capture
+    // expressions like [my_unique_ptr = std::move(my_unique_ptr)].
+    {
+      // example: hand off a unique_ptr to a worker thread:
+      struct A { int x = 7; };
+      unique_ptr<A> ptrToA {new A()};
+
+      // this here won't work because unique_ptr cannot be copied:
+      //auto f1 = [ptrToA]() { assert(ptrToA->x == 7); };
+      
+      // this here will compile but will crash due to a dangling ref in the 
+      // worker thread (well, the following join() prevents the dangling
+      // ref, but in general you wouldn't want to join() in this scenario
+      // since it defeats the purpose of the thread).
+      // WARNING: remember capture by ref is a red flag when it comes to
+      // threading! (be it actual threads or pushing a closure to an
+      // executor / event-loop object).
+      //   auto f1 = [&ptrToA]() { assert(ptrToA->x == 7); };
+      //   thread worker(f1);
+      /* TODO: this doesnt compile with clang 3.5 using c++ stdlib of gcc 4.9.2)
+      auto f1 = [movedPtrToA = std::move(ptrToA)]() { assert(movedPtrToA->x == 7); };
+      thread worker(f1);
+      worker.join();
+      */
+
+      // whats a workaround for lack of std::move in lambda captures in C++11?
+      // E.g. pass shared_ptr or boost::intrusive_ptr to the thread's closure.
+
+      // I cannot think of other use cases for generalized lambda capture 
+      // expressions, but refrain from using them unnecessarily, e.g. this
+      // here is ugly imo:
+      int x = 3;
+      auto f2 = [x = x+7]() { return x+100; };
+      assert(f2() == 110);
+      assert(x == 3);
+    }
   }
 
   // rvalue refs, move semantics

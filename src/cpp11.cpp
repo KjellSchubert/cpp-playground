@@ -1008,12 +1008,23 @@ void play_with_cpp11() {
   }
 
   // std::function vs std::mem_fn (and deprecated std::mem_fun) vs .* and ->*
-  // func ptr sytax playground
+  // Summary of this long section:
+  //   * use s.th. like std::function<void(int,char)> to store ptrs to 
+  //     non-member functions.
+  //   * use lambda instead of std::bind (lambdas can be stored via std::function)
+  //   * in the rare case you need to store a ptr to a member function A::fun
+  //     assign to std::function<...(A&,...)>, or more easily just use
+  //     'auto f = mem_fn(&A::fun)'. This way you never have to use the odd 
+  //     looking .* and ->* operators to call mem funcs. 
+  //   * dont ever use std::bind, std::mem_fun (use std::mem_fn instead)
+  //   * dont use ugly typedef syntax to decl func ptr types. Instead use C++11
+  //     'using FuncPtr_t = void (*)(int,char)', or std::function<void(int,char)>
   {
+    // First here's the old C++98 func ptr syntax:
     // Store a ptr to Foo::foomember const string& -> float
     Foo foo1;
     Foo* foo1ptr { &foo1 };
-    typedef float (Foo::*funcptr1_t)(const string&);
+    typedef float (Foo::*funcptr1_t)(const string&); // this is old C++98 syntax
     funcptr1_t memfuncptr1 = &Foo::foomember;
     // See also http://www.newty.de/fpt/fpt.html for mem func ptr syntax,
     // which is ugly syntax imo.
@@ -1027,18 +1038,11 @@ void play_with_cpp11() {
     float x3 = funcptr2(foo1, "hi");
 
     // why is there std::mem_fn, isn't this redundant since std::function 
-    // alrdy can store pointers to members?
+    // alrdy can store pointers to members? Nope: std::mem_fn() is the utility
+    // function that will turn a member func ptr &A::fun into something
+    // that can be treated like (and assigned to) std::function(TR(&A,T1,T2...))
     // Also note that C++98's std::mem_fun is deprecated! See 
     // http://stackoverflow.com/questions/11680807/stdmem-fun-vs-stdmem-fn
-    
-    // At first I thought std::mem_fn is a class name, similar to std::function,
-    // but its a name of a function that returns an unspecified obj (functor
-    // presumable / for example). So this here won't compile:
-    //   std::mem_fn<float(Foo::*)(const string&)> funcptr7 = &Foo::foomember;
-    //   float x7 = funcptr7(foo1, "hi"); // this syntax hides the funky ->* operator
-    // So I guess mem_fn allows you to not write the std::function syntax above
-    // since presumably mem_fn returns this std::function<> alrdy. Cool.
-
     auto funcptr3 = std::mem_fn(&Foo::foomember);
     float x4 = funcptr3(foo1, "hi");
 
@@ -1052,7 +1056,6 @@ void play_with_cpp11() {
     //   float(Foo,const string&) funcptr5;
    
     // and compare with 'using' syntax to typedef a func ptr type:
-  
     using funcptr6_t = float (Foo::*)(const string&);
     funcptr6_t funcptr6 = &Foo::foomember;
     float x6 = (foo1.*funcptr6)("hi");
@@ -1061,7 +1064,7 @@ void play_with_cpp11() {
     //   using funcptr5_t = float (*)(Foo,const string&);
     //   funcptr5_t funcptr5 = &Foo::foomember;
     // Clang says it cannot init the free func with a member func.
-    // Luckily std::function can unify the syntax of these.
+    // Luckily std::function & std::mem_fn can unify the syntax of these.
   
     // now functor assigned to function:
     // Functors are less important now that we have lambda, but we have
@@ -1086,6 +1089,52 @@ void play_with_cpp11() {
     //   funcptr3 = funcptr2;
     funcptr2 = funcptr6; // function from mem ptr in 'using' type alias
     funcptr2 = [](Foo& f, const string& s) -> float { return 0; }; // function<> from lambda
+  }
+  {
+    // Now some func ptrs for global funcs, not mem ptrs:
+    
+    // old school C++98 typedef, kinda ugly imo:
+    typedef void (*funcptr1_t)(int);
+    funcptr1_t funcptr1 = &global_voidfunc; // not in JS you don't need a '&'
+    // The '&' is kinda redundant in C++, whats the type of the expression 
+    // without the '&' anyway? It's the same type I think:
+    static_assert(!is_same<decltype(&global_voidfunc), decltype(global_voidfunc)>::value, "");
+    // so no, it's not.
+    funcptr1 = global_voidfunc; // so even though its not the types are convertible, TODO
+    funcptr1(7);  // I could have sworn this syntax was not allowing in C++98...
+    (*funcptr1)(7); // this syntax is kinda ugly imo
+    // Anyway: as a rule of thumb NEVER use this ugly C++98 typedef syntax
+    // to decl func ptrs.
+    
+    // with C++11 'using' instead of typedef:
+    // The static_assert proves the types of both typedef & using are the same.
+    using funcptr2_t = void (*)(int);
+    funcptr2_t funcptr2 = &global_voidfunc;
+    funcptr2(7);
+    (*funcptr2)(7);  // this syntax we should consider deprecated?
+    static_assert(std::is_same<funcptr1_t, funcptr2_t>::value, "");
+
+    // with C++11 auto, not even bothering to typedef or using:
+    auto funcptr3 = &global_voidfunc;
+    funcptr3(7);
+    static_assert(std::is_same<funcptr2_t, decltype(funcptr3)>::value, "");
+
+    // with std::function:
+    std::function<void(int)> funcptr4 = &global_voidfunc;
+    funcptr4(7);
+    //static_assert(std::is_same<funcptr2_t, decltype(funcptr4)>::value, "");
+    // So not the same type, but compatible in many ways:
+    funcptr4 = funcptr1;
+    funcptr4 = funcptr2;
+    funcptr4 = funcptr3;
+
+    // P.S. just for completeness here's another syntax from
+    // http://stackoverflow.com/questions/16498969/how-do-i-typedef-a-function-pointer-with-the-c11-using-syntax
+    // I dont like this syntax too much at 1st glance, so lets forget it exists.
+    using funcptr9_t = std::add_pointer<void(int)>::type;
+    funcptr9_t funcptr7 = global_voidfunc;
+    funcptr7(7);
+    std::function<void(int)> funcptr8 = funcptr7;
   }
 
   // enum class: strongly typed enums, with fixed scoping

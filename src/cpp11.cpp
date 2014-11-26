@@ -73,9 +73,37 @@ namespace {
         ++copy_count;
         return *this;
       }
+
+      // make it movable (compile will not auto-generate move ctor and move
+      // assignemnt since we have user-defined copy ops)
+      CopyCounted(CopyCounted&& rhs) = default;
+      CopyCounted& operator=(CopyCounted&& rhs) = default;
+
       static int copy_count;
   };
   int CopyCounted::copy_count = 0;
+
+  // another variant of CopyCounted, used in tests below
+  enum class ExecutedFunc {None,Ctor,CopyCtor,CopyOp,MoveCtor,MoveOp};
+  ExecutedFunc executedFunc = ExecutedFunc::None; // ugly global var for tests
+  int executedFuncCount = 0;
+  void accuExecutedFunc(ExecutedFunc func) {
+    executedFunc = func; // so that's really just 'lastExecutedFunc'
+    ++executedFuncCount;
+  }
+  void assertExecutedFunc(ExecutedFunc expectedCall, int expectedCallCount=1) {
+    assert(expectedCall != ExecutedFunc::None);
+    assert(executedFunc == expectedCall);
+    assert(executedFuncCount == expectedCallCount);
+
+    executedFunc = ExecutedFunc::None; // implicit surprise reset
+    executedFuncCount = 0;
+  };
+  void assertExecutedFuncNone() {
+    assert(executedFunc == ExecutedFunc::None);
+    assert(executedFuncCount == 0);
+  }
+
 }
 
 void play_with_member_pointers();
@@ -285,6 +313,219 @@ void play_with_cpp11() {
     assert(baz2.sum == 17);
     // also see http://en.cppreference.com/w/cpp/utility/initializer_list for
     // using initializer_list outside of c'tors
+  }
+
+  // rvalue refs, move semantics
+  // We alrdy had copy-elision & RVO before C++11 in certain cases for many 
+  // compilers, still there was plenty of room for improvement with respect
+  // to getting rid of unwanted copy ctor calls.
+  // http://google-styleguide.googlecode.com/svn/trunk/cppguide.html suggests
+  // to limit rvalue refs to move ctors & move assignments (which supplement
+  // C++98 copy ctor & copy op).
+  {
+    struct C {
+      C() { accuExecutedFunc(ExecutedFunc::Ctor); }
+
+      // copy
+      C(const C& rhs) { accuExecutedFunc(ExecutedFunc::CopyCtor); }
+      C& operator=(const C& rhs) { 
+        accuExecutedFunc(ExecutedFunc::CopyOp); 
+        return *this; // I was surprised this is a warning only when I forget 
+               // the return, clang said: 'control reaches end of non-void function'
+               // May wanna make this an err
+      }
+
+      // move ctor and move assignment.
+      // These would have been added by the compiler implicitly if I hadnt
+      // added user-defined copy ops above, for detailed rules see
+      // http://en.cppreference.com/w/cpp/language/move_operator
+      // So these have exactly the same signature as copy ctor and copy op,
+      // except they take (T&& rhs) instead of (const T&) args.
+      C(C&& rhs) = default;
+      C& operator=(C&& rhs) = default;
+
+      vector<int> data = {7,8};
+    };
+    C c1;
+    assertExecutedFunc(ExecutedFunc::Ctor);
+
+    // here the regular copy ctor is called:
+    C c2(c1);
+    assertExecutedFunc(ExecutedFunc::CopyCtor);
+
+    // still regular copy ctor via uniform init:
+    C c3{c1}; // 100% the same as 'C c3 = {}' btw
+    assertExecutedFunc(ExecutedFunc::CopyCtor);
+
+    C c4 = c1; // 100% the same as C c4(c1), even though it sort of looks like assignment
+    assertExecutedFunc(ExecutedFunc::CopyCtor);
+
+    // lets write a func that has a move ctor kick in, making
+    // sure that pre-C++11 copy elision couldnt have kicked in
+    // (which kicked in for 'return MyReturnType(ctorArgs)' mostly)
+    auto combineCs = [](const C& c1, const C& c2) -> C {
+      C result; // naming it should prevent pre-C++11 RVO
+      // concatenating vector<T>s is not as simple as one would hope btw:
+      result.data = c1.data;
+      result.data.insert(result.data.end(), c2.data.begin(), c2.data.end());
+      return result;
+    };
+    C c5;
+    assertExecutedFunc(ExecutedFunc::Ctor);
+    c5 = combineCs(c1, c2);
+    assertExecutedFunc(ExecutedFunc::Ctor); // this is the ctor in combineCs()
+    // so note hat no copy op was called, only the compiler-generated
+    // move ctor was executed, which in turn moved the vector content
+    // efficiently via some swap().
+    // To test what happens without move ctors comment out the '= default'
+    // lines above.
+    assert(c5.data.size() == 4 && c5.data[0] == 7);
+
+    // how to verify the existence of move ctors at compile time: 
+    static_assert(std::is_move_constructible<C>::value, "");
+    static_assert(is_nothrow_move_constructible<C>::value, "");
+    //static_assert(is_trivially_move_constructible<C>::value, ""); // assert fails
+   
+    // Why is there such a specific is_nothrow_move_constructible?
+    // Because failed moves have implications on the 3 David Abrahams 
+    // exception-safety guarantees (no-throw, basic, strong). See also:
+    // http://www.cplusplus.com/reference/type_traits/is_nothrow_move_constructible/
+    // http://stackoverflow.com/questions/14601469/what-if-an-object-passed-into-stdswap-throws-an-exception-during-swapping/14601722#14601722
+  }
+  {
+    // another example but this time with move ctor implicitly defined by 
+    // the compiler. To get this ctor we have to refrain from adding
+    // user-defined ctor & copy op among other things. Example:
+    struct D {
+      explicit D(int x) { }  // user-defined ctor won't prevent move
+      vector<int> data = {7,8};
+      CopyCounted copyCounted; // to measure number of copy op/ctor calls
+    };
+    static_assert(std::is_move_constructible<D>::value, "");
+    //static_assert(is_nothrow_move_constructible<D>::value, ""); // fails when adding CopyCounted
+    //static_assert(is_trivially_move_constructible<D>::value, ""); // fails due to vector alrdy
+   
+    // again a move ctor scenario where RVO cannot kick in:
+    auto createD = []() {
+      D myD(7);
+      myD.data.push_back(9);
+      return myD;
+    };
+    CopyCounted::copy_count = 0;
+    D d1 = createD();
+    assert(d1.data.back() == 9);
+    assert(CopyCounted::copy_count == 0); // because it was move-constructed
+       // via default compiler-generated move ctor
+
+    // now verify a regular copy still calls copy-ctor
+    D d2(7);
+    D d3(8);
+    d3 = d2;
+    assert(CopyCounted::copy_count == 1);
+    CopyCounted::copy_count = 0;
+
+    // now do the same with std::move, which will (potentially) salvage its
+    // args and leave it in a sad (destructible & assignable) but otherwise
+    // undefined state.
+    // Note that all std::move does is turn its arg into an xvalue, which in
+    // turn can bind to rvalue refs (for the gory details see
+    // http://en.cppreference.com/w/cpp/language/value_category).
+    assert(d2.data.size() == 2);
+    d3 = std::move(d2);
+    assert(d2.data.size() == 0); // technically undefined behavior, s2 was salvaged
+    assert(CopyCounted::copy_count == 0);
+  }
+  {
+    // another example: what happens if some members are move constructable, but
+    // others are not: is the compiler still gonna be able to generate a move ctor,
+    // calling a mixture of move & copy assignment operators?
+    struct A_movable {
+      int x = {};
+    };
+    struct A_not_movable {
+      A_not_movable() {}
+
+      // This is one way to prevent the compiler generated move ctor:
+      A_not_movable(A_not_movable&& rhs) = delete;
+      A_not_movable& operator==(A_not_movable&& rhs) = delete;
+
+      // But what surprised me here was that deleting the move ctor
+      // implicitly delete the compiler generated copy op also!
+      // So explicitly resurrect the copy op & ctor:
+      //   A_not_movable(const A_not_movable& rhs) = default;
+      //   A_not_movable& operator=(const A_not_movable& rhs) = default;
+      // Actually this didn't work for me. So adding explicit ctor here
+      // also prevents a move ctor from being generated:
+      //A_not_movable(const A_not_movable& rhs) { y = 7; }
+      //A_not_movable& operator=(const A_not_movable& rhs) { y = 8; return *this; }
+
+      int y = {};
+    };
+    static_assert(std::is_move_constructible<A_movable>::value, "");
+    static_assert(!std::is_move_constructible<A_not_movable>::value, "");
+    struct B {
+      A_movable a1;
+      A_not_movable a2;
+    };
+    static_assert(!std::is_move_constructible<B>::value, "");
+    // So this shows that the compiler won't create a move c'tor unless
+    // every single member has a move ctor.
+    // WARNING: this conflicts with my expectation: I thought the compiler
+    // would generate a move ctor even if some members were not movable,
+    // generating code to copy the non-movable members.
+    // TODO!
+
+    // using std::move on non-movable types is still possible, it still will
+    // create an xvalue ref, but this won't be able to call a move ctor then.
+    B b1;
+    //B b2(std::move(b1));
+    // Clang errors here with:
+    //   copy constructor is implicitly deleted because 'A_not_movable' has a user-declared move
+    //   constructor:
+    //     A_not_movable(A_not_movable&& rhs) = delete;
+    // So deleting a compiler generated move ctor will also delete the
+    // compiler generated copy ctor? I wonder why...
+  }
+  {
+    // Using rvalue refs outside of move ctors and move assignments.
+    // http://google-styleguide.googlecode.com/svn/trunk/cppguide.html advises
+    // against doing that, since && is relatively new & many devs are not
+    // yet comfortable using it.
+    // Anyway, testing this here:
+    struct A {
+      static int f1(int& x) {
+        ++x;
+        return 1;
+      }
+      static int f1(int&& x) {
+        return 2;
+      }
+    };
+
+    // choose lvalue (int&) overload of f1()
+    int val = 2;
+    assert(A::f1(val) == 1); // calls int& overload
+    assert(val == 3);
+
+    // choose rvalue (int&&) overload of f1() because
+    // the retval of f2() is not an lvalue.
+    auto f2 = []() {
+      return 7; 
+    };
+    assert(A::f1(f2()) == 2);
+
+    // choose lvalue (int&) overload of f1() because 
+    // thr retval of f3() is an lvalue:
+    // Note that surprisingly here I had to add '-> int&' since
+    // otherwise the compiler would deduce a retval of 'int'.
+    auto f3 = [](int& intRef) -> int& {
+      intRef += 10;
+      return intRef;
+    };
+    val = 2;
+    assert(A::f1(f3(val)) == 1);
+    cout << val;
+    assert(val == 13); // original 2, plus 10 from f3, plus 1 from A::f1(int&)
   }
 
   // array<T>
@@ -785,7 +1026,7 @@ void play_with_cpp11() {
     // because private inheritance is undesirable.
   }
 
-  // override/final/delete/delete/using
+  // override/final/delete/default/using
   // While we're at pulling ctors from base classes: override & final & delete 
   // keywords for inherited funcs.
   //   http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2007/n2346.htm
@@ -860,9 +1101,56 @@ void play_with_cpp11() {
       private: vector<int> bla {1,2}; // leak
     }; // surprised Clang doesnt warn here (non-virt dtor in X)
     unique_ptr<X> xPtrToY(new Y()); // TODO: verify leak with Clang Memory Sanitizer (need x64)
+
+    // Imo the most important use case of delete is disabling undesired conversions
+    // and compiler-generated default ctors: no longer have to add private: decls for 
+    // these to hide them, but can explicitly disable via '= delete'.
+    // (see http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2007/n2346.htm#delete).
+    {
+      struct WithConversion {
+        explicit WithConversion(int x) {}
+      };
+      WithConversion w1(7); // OK
+      WithConversion w2(7.5); // implicit conversion/narrowing, clang warns at least, no error
+      WithConversion w3('x'); // potential bug with implicit conversion
+
+      struct WithoutConversion {
+        explicit WithoutConversion(int x) {}
+        explicit WithoutConversion(char c) = delete; // C++11
+        explicit WithoutConversion(float f) = delete; // C++11
+        //WithoutConversion(WithoutConversion&& rhs) = delete; // autogen
+      };
+      WithoutConversion o1(7); // OK
+      //WithoutConversion o2('x'); //error: call to deleted constructor of 'WithoutConversion', good!
+      //WithoutConversion o3(7.5f); // error, good
+      //WithoutConversion o4(7.5); //error: call to constructor of 'WithoutConversion' is ambiguous.
+                                 // Clang's note are EPIC in this case again! Confusions seem
+                                 // between auto-gen move & copy c'tors
+      //WithoutConversion o5(static_cast<double>(7.5));
+      WithoutConversion o6(wchar_t('x')); // sadly this compiles still, we got lots of implicit convs left
+    }
+
+    {
+      struct NotCopyable {
+        // since adding a deleted copy ctor counts as having added a ctor (which 
+        // is weird imo) the compiler won't add a default no-arg ctor either.
+        NotCopyable() = default; // or '{}'
+
+        // this here is more concise than the old C++98 syntax:
+        //    private: NotCopyable(const NotCopyable& rhs);
+        NotCopyable(const NotCopyable& rhs) = delete;
+
+        // deleting the copy ctor wont implicitly delete the copy aka assignment
+        // operator, so we need to explicitly delete this also:
+        NotCopyable& operator=(const NotCopyable& rhs) = delete;
+      };
+      NotCopyable n1, n2;
+      //NotCopyable n3(n1); // errors, because default ctor was deleted
+      //n2 = n1; // clang says "error: overload resolution selected deleted operator '='"
+    }
   }
   
-  // alignas/alignof
+  // alignas/std::alignment (and redundant(?) alignof)
   // I wonder why we have both alignof and std::alignment_of, one of these is 
   // redundant (alignof(expr) == std::alignment_of<decltype(expr)>::value).
   // See http://stackoverflow.com/questions/7053190/what-are-the-alignas-and-alignof-keywords-used-for

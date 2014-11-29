@@ -24,10 +24,13 @@
                #'-fsanitize=memory', 
 
                # pick either standard (#if will exclude features from compile):
-               #'-std=c++11'
-               #'-std=c++14' should have worked for clang 3.5 but didnt
-               '-std=c++1y'
-               #'-std=c++1z
+               #'-std=c++11',
+               #'-std=c++14', # should have worked for clang 3.5 but didnt
+               '-std=c++1y',
+               #'-std=c++1z',
+              
+               # to use clang's libc++ instead of the gcc default (for <codecvt> mostly):
+               '-stdlib=libc++'
             ],
             'sources': [
                 'src/cpp11.cpp',
@@ -39,7 +42,8 @@
                 'src/variadic_template_func.cpp',
             ],
             'libraries': [
-                '-lpthread'
+                '-lpthread',
+                '-nodefaultlibs -lc++ -lm -lc -lgcc_s -lgcc', # if using -stdlib=libc++
             ],
     },
     ],

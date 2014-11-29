@@ -18,6 +18,7 @@
 #include <map>
 #include <unordered_set>
 #include <list>
+#include <codecvt> // not in gcc 4.9 yet, requires clang libc++
 
 using namespace std;
 
@@ -375,5 +376,88 @@ void play_with_stl() {
        std::cout << "U+" << std::hex << std::setw(4) << std::setfill('0') << c << '\n';
 
     // note that C++11 introduces http://en.cppreference.com/w/cpp/locale/codecvt_utf8
+  }
+
+  // some string tests
+  {
+    string s = "a";
+    cout << "sizeof(string)=" << sizeof(s) << '\n'; // I see 4 for gcc 4.9 / clang 3.5
+    const auto delta = s.data() - reinterpret_cast<string::pointer>(&s);
+    bool hasSmallStringOptimization = 0 <= delta && delta <= sizeof(s);
+    cout << "hasSmallStringOptimization=" << boolalpha << hasSmallStringOptimization << endl;
+  }
+  {
+    string s = "hello world";
+    //s.append('s');
+    s.append("s!");
+    const int indexLastL = s.rfind("l");
+    assert(indexLastL != string::npos);
+    s.erase(s.begin() + indexLastL);
+    assert(s == "hello words!");
+    cout << "string extra capacity after manips is " 
+         << dec << (s.capacity() - s.length()) << endl;
+    s.shrink_to_fit(); // since C++11, no more need for swap trick
+    //assert(s.capacity() == s.length()); // not really guaranteed, or is it? not critical
+  }
+  {
+    // note string.size & string.length are 100% identical,
+    // both returning len in bytes, not chars (since encoding
+    // is unspecified):
+
+    std::string s = u8"\u00c4 10 \u20AC"; // A-umlaut & euro symbol. And notice the 'u8', which is C++11
+    // so here the string just knows its bytes, still not
+    // its encoding. Unlike a string in most other languages, e.g.
+    // python3. wstring or basic_string<uchar16_t> or more like
+    // a python3 string, as in str.length() will return len in
+    // chars, not bytes. Though I guess uchar16_t still could
+    // represent some code points / glyphs in >1 uchar16s.
+    // wchar_t should be 32 bit (is this guaranteed?).
+    //   >python3
+    //   s = "\u00c4 10 \u20AC"
+    //   print(s) # prints umlaut, though my terminal shows ? for Euro
+    //   print(len(s)) # prints 6, so len in (utf32?) chars
+    //   b = s.encode('utf-8')
+    //   print(len(b)) # so utf8 encoding is 9 bytes
+    //   print(b) # b'\xc3\x84 10 \xe2\x82\xac'
+    //   assert len(s.encode('utf16')) - 2 == 2 * len(s) # 2 bytes for utf16 FF FE marker
+    assert(s.length() == s.size());
+    assert(s.length() == 9); // len in utf8 bytes (string is like a vector<byte>)
+    std::string s2 = "\xc3\x84 10 \xe2\x82\xac"; // happens to be utf8
+    assert(s == s2);
+    
+    // this here cannot work:
+    //   wstring ws = s; // error: no viable conversion from 'basic_string<char>' to 'basic_string<wchar_t>'
+    // because the string is not aware of its encoding. And I think
+    // even the wstring is not aware of its encoding, which only by
+    // conventions is utf32. Or does the standard explicitly enforce
+    // utf32 for library interop? Unsure.
+    // 
+    // This here could work:
+    //   wstring ws(s, 'utf8')
+    // if C++ had such a ctor. Out options are:
+    //   * ICU
+    //   * libiconv
+    //   * C++11 #include <codecvt> - sadly not supported in GCC 4.9 yet
+    //   * use clang/llvm's own libc++
+    //   * boost::codecvt?
+    //   * a homebrewn utf8->16 converter (20ish lines of undesirable code)
+    // I tried libc++:
+    //   >apt-cache search "libc\+\+" | more
+    //   >apt-cache show "libc\+\+-dev"
+    //   >sudo apt-get install libc++-dev
+    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>,char16_t> convert16;
+    std::u16string s3 = convert16.from_bytes(s);
+    // About string literals: see http://en.cppreference.com/w/cpp/language/string_literal
+    // So the variants are:
+    //   "" for char[], so a byte sequence
+    //   L"" is wide string literal (pre C++11)
+    //   u8"" u"" U"" are new C++11 with utf8/16/32 encodings of the escaped chars
+    assert(s3.data() == u16string(u"\u00c4 10 \u20AC"));
+    //cout << "utf16: " << s3 << '\n'; // error, you cannot cout u16strings?
+
+    // now the same conversion with wstring instead u16string:
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t> convertW;
+    std::wstring s4 = convertW.from_bytes(s);
+    assert(s4.data() == wstring(L"\u00c4 10 \u20AC"));
   }
 }

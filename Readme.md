@@ -108,6 +108,7 @@ Random links:
   surprised me, they seem to have a lot of non-exception-safe code still. One of the few things that I 
   disagreed with was the 'and an excessively "functional" style of programming' comment. Some example
   would have been helpful to illustrate this excessiveness.
+* https://isocpp.org/blog
 * https://ascend4nt.wordpress.com/2012/12/28/c-11-must-have-books/
 * [CERT C++ Coding Standard](https://www.securecoding.cert.org/confluence/pages/viewpage.action?pageId=637)
 * http://vimeo.com/97318797 as a preview to the (as of end 2014) upcoming C++11/14 Scott Meyers book

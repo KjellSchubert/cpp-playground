@@ -460,4 +460,46 @@ void play_with_stl() {
     std::wstring s4 = convertW.from_bytes(s);
     assert(s4.data() == wstring(L"\u00c4 10 \u20AC"));
   }
+
+  // reverse_iterators & reverse_iterator.base()
+  {
+    // pretty contrived example: there should hardly ever be a need for
+    // a reverse_iterator on a map:
+    set<int> elems = {3, 6, 8, 10};
+    assert(*elems.begin() == 3);
+    assert(*elems.rbegin() == 10);
+    auto reverse_iter = elems.rbegin();
+    //reverse_iter += 1; // doesnt work , good
+    std::advance(reverse_iter, 1); // mutating func btw, unlike std::next which rets a copy
+    assert(*reverse_iter == 8);
+    reverse_iter = std::next(reverse_iter);
+    assert(*reverse_iter == 6);
+
+    // WARNING: the behavior of reverse_iter.base() is surprising and
+    // unintuitive imo: the reverse_iter.base() points not to the 
+    // same element the reverse_iter points to! Reasoning seems to be
+    // that the reverse_iterator is supposed to facilitate intuitve
+    // insertion, but not deletion. See Meyers STL book item 28.
+    // http://stackoverflow.com/questions/1830158/how-to-call-erase-with-a-reverse-iterator
+    auto iter = reverse_iter.base();
+    assert(*iter == 8);
+    elems.erase(iter, elems.end());
+    assert(elems == set<int>({3,6}));
+  }
+  {
+    // same test with vector, code is 100% identical to map code:
+    vector<int> elems = {3, 6, 8, 10};
+    assert(*elems.rbegin() == 10);
+    auto reverse_iter = elems.rbegin();
+    //reverse_iter += 1; // works with vector iter
+    std::advance(reverse_iter, 1); // mutating func btw, unlike std::next which rets a copy
+    assert(*reverse_iter == 8);
+    reverse_iter = std::next(reverse_iter);
+    assert(*reverse_iter == 6);
+    auto iter = reverse_iter.base();
+    assert(*iter == 8);
+    elems.erase(iter, elems.end());
+    assert(elems == vector<int>({3,6}));
+
+  }
 }

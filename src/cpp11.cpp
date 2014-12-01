@@ -587,6 +587,16 @@ void play_with_cpp11() {
     A a;
     a.f();
   }
+  // what about a lambda func that returns a lambda func: this is often
+  // used in Javascript (function returning a function) and Python (decorators)
+  {
+    auto make_add = [](int x) {
+      return [x](int y) { return x + y; };
+    };
+    auto add2 = make_add(2);
+    assert(add2(3) == 5);
+    assert(make_add(2)(3) == 5);
+  }
 
   // range-based for:
   //   http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2009/n2930.html
@@ -1449,6 +1459,11 @@ void play_with_cpp11() {
     
     // old school C++98 typedef, kinda ugly imo:
     typedef void (*funcptr1_t)(int);
+    // Here are some alternative syntaxes which I think would be intuitive
+    // (at least in C++11) but don't work:
+    //   typedef void (*)(int) funcptr1_t;
+    //   typedef void(int) funcptr1_t;
+    // Note that these syntaxes sort of work in C++ 'using' typedefs.
     funcptr1_t funcptr1 = &global_voidfunc; // not in JS you don't need a '&'
     // The '&' is kinda redundant in C++, whats the type of the expression 
     // without the '&' anyway? It's the same type I think:
@@ -1467,6 +1482,23 @@ void play_with_cpp11() {
     funcptr2(7);
     (*funcptr2)(7);  // this syntax we should consider deprecated?
     static_assert(std::is_same<funcptr1_t, funcptr2_t>::value, "");
+
+    // This syntax here also works with C++11, note the missing '(*)'
+    // compared to funcptr2_t. Why does C++11 distinguish between functions
+    // and pointers to functions? E.g. in JS you just pass a function as
+    // a regular value, there's no concept of ptrs to funcs.
+    using func5_t = void(int);
+    func5_t* funcptr5 = &global_voidfunc; // '= global_voidfunc' works also
+    funcptr5(7);
+    (*funcptr5)(7);
+    static_assert(std::is_same<decltype(funcptr5), decltype(funcptr2)>::value, "");
+    static_assert(!std::is_same<func5_t, funcptr2_t>::value, "");
+
+    // So which decltype does a lambda func have? func5_t or funcptr2_t?
+    // Apparently neither:
+    auto lambdaFunc = [](int)->void {};
+    //static_assert(std::is_same<funcptr2_t, decltype(lambdaFunc)>::value, "");
+    //static_assert(std::is_same<func5_t,    decltype(lambdaFunc)>::value, "");
 
     // with C++11 auto, not even bothering to typedef or using:
     auto funcptr3 = &global_voidfunc;

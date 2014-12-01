@@ -668,7 +668,16 @@ void play_with_cpp11() {
   // * some C++98/03 code can be broken by move semantics, but only if the d'tor
   //   expects certain funky invariants to be valid, see 
   //   http://stackoverflow.com/questions/10796910/invariant-probleme-and-implicit-move-constructor
-  //   So be aware of rare porting problems for C++11 around dtors.
+  //   So be aware of rare porting problems for C++11 around dtor.
+  // * rule of 0/3/5 http://en.cppreference.com/w/cpp/language/rule_of_three
+  //   http://scottmeyers.blogspot.fr/2014/03/a-concern-about-rule-of-zero.html
+  //   http://isocpp.org/files/papers/n3578.pdf quote "we propose that no copy 
+  //     function, move function, or destructor be compiler-generated if any of 
+  //     these functions is user-provided."
+  //   I would love that rule! It might break some legacy C++ code though, and
+  //   it would prevent some legacy C++ code from benefitting from move ctors?
+  //   Also would be nice to have a tool that lists missed optimization opportunities
+  //   due to a missing move ctor (mostly for legacy code).
   // Did Dave Abrahams get turned off from C++? See his post at 
   // https://web.archive.org/web/20131015192353/http://cpp-next.com/archive/2011/11/having-it-all-pythy-syntax/#more-3972
   // He works at Apple now, working on Swift stdlib.
@@ -1148,6 +1157,8 @@ void play_with_cpp11() {
   // http://stackoverflow.com/questions/12877546/how-do-i-avoid-implicit-casting-on-non-constructing-functions-c
 
   // type_traits
+  // See also http://en.wikipedia.org/wiki/Substitution_failure_is_not_an_error 
+  // for how to impl similar type checks that can return a bool at compile time
   {
     // Note that std::is_same could be impl'd in the past easily with a handfull
     // of template<T,U> code, see .

@@ -3,6 +3,7 @@ C++ playground
 
 These are personal notes & experiments & cheat sheets on a few C++11 & C++14 changes.
 Critical books: all the Scott Meyers ones (TODO: the STL one and the C++11 one)
+Good summary of new C++11 features: http://www.aristeia.com/C++11.html
 
 Move c'tors
 ---

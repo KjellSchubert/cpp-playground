@@ -9,6 +9,7 @@ void play_with_cpp11();
 void play_with_locale();
 void play_with_move();
 void play_with_stl();
+void play_with_mpl();
 void play_with_threading();
 void variadic_template_func();
 
@@ -20,6 +21,7 @@ int main() {
     variadic_template_func();
     play_with_move();
     play_with_stl();
+    play_with_mpl();
     play_with_threading();
 		cout << "exiting main()" << endl;
   }

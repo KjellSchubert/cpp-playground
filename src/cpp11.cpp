@@ -1645,6 +1645,13 @@ void play_with_cpp11() {
     //static_assert(C14_hang::hangMe(1) == 7, ""); // should hang, but clang prints:
     // 'constexpr evaluation hit maximum step limit; possible infinite loop?'
     // That's pretty kick-ass!
+    
+    // not only funcs can be declared constexpr, but also expressions:
+    constexpr int n = std::numeric_limits<int>::max();
+    //n = 123; // constexpr is implicitly const: error: read-only variable is not assignable
+    //constexpr int m = std::time(NULL);
+    // but:
+    const int m = std::time(NULL);
   }
 
   // delegating ctors A() : A(expr1, ...) {}
@@ -1814,8 +1821,8 @@ void play_with_cpp11() {
   // http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2007/n2249.html
   {
     // C++98:
-    char* s = "foo";
-    wchar_t* sw = L"foo";
+    const char* s = "foo";  // w/o const: clang says [-Wc++11-compat-deprecated-writable-strings]
+    const wchar_t* sw = L"foo";
     string str(s);
     wstring wstr(sw);
 
@@ -1827,7 +1834,7 @@ void play_with_cpp11() {
     u16string u16str(s16);
     u32string u32str(s32);
   }
-  
+
   // alignas/std::alignment (and redundant(?) alignof)
   // I wonder why we have both alignof and std::alignment_of, one of these is 
   // redundant (alignof(expr) == std::alignment_of<decltype(expr)>::value).
@@ -1842,6 +1849,13 @@ void play_with_cpp11() {
     assert(((&charsStoringInt[0] - static_cast<char*>(nullptr)) & 15) == 0);
 
   }
+
+  // user-defined literals, like {float dist = 12_km;}
+  // See http://en.cppreference.com/w/cpp/language/user_literal
+  //   double operator "" _km(double)
+  //   // or: distance_type operator "" _km(double);
+  // double dist = 12.5_km;
+  // Interesting concept, useful for space shuttle code I guess.
 
   // attribute support, similar to C# [Test] sorts of attribs.
   // inspired by:
@@ -1886,6 +1900,18 @@ void play_with_cpp11() {
   // See usecase PI<float>, PI<double>.
   {
     // TODO
+  }
+
+  // there was some (minor?) changes on eval order in C++11, mostly around
+  // expressions with side-effects.
+  // See http://en.cppreference.com/w/cpp/language/eval_order for details.
+  {
+    auto fun = [](int a, int b) { return 100 * a + b; };
+    int i=0;
+    assert(fun(++i, ++i) == 102); // terrible code
+      // clang emits 'warning: multiple unsequenced modifications to 'i' [-Wunsequenced]'
+      // does comma operator left-to-right precedence guarantee sequence order 
+      // pre C++11?
   }
 
   play_with_member_pointers();

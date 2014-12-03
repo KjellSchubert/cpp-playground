@@ -38,6 +38,7 @@
                 'src/main.cpp',
                 'src/move.cpp',
                 'src/stl.cpp',
+                'src/mpl.cpp',
                 'src/threading.cpp',
                 'src/variadic_template_func.cpp',
             ],

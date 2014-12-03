@@ -7,7 +7,10 @@ play.target.mk
 out/
 
 # vim/emacs autosave
-.*\.swp
+*.swp
 
 # created by tests
 text\.txt
+test\.txt
+
+*.bak

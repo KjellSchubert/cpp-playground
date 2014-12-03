@@ -22,6 +22,10 @@
 
 using namespace std;
 
+void stl_play_with_sort();
+
+void stl_play_with_custom_type_traits();
+
 /* not VS yet, Clang/gcc only:
 template <class T>
 struct S {
@@ -502,4 +506,225 @@ void play_with_stl() {
     assert(elems == vector<int>({3,6}));
 
   }
+
+  /*
+  // checking if Clang diagnoses (somewhat) common ctor problems:
+  {
+    struct A {
+      A(string x) : s(x) {} 
+      string f() { return "hi"; }
+      string getS() const { return s; }
+      string s = "foo";
+    };
+    struct B : public A {
+      //B() : A(f()) {} // sadly no clang warning here :(
+      B() : A(getS()) {} // no warn here either, and we actually access uninit mem here
+    };
+    B b;
+    cout << b.getS(); // prints garbage, but the (naive) intention was to get "hi"
+    assert(b.getS() == "hi");
+  }
+  */
+
+  // testing istream_iterator, call the app like this:
+  //   echo "hello world" | out/Default/play
+  // Otherwise it'll wait for interactive input until you ctrl-d (Linux) or 
+  // ctrl-z (Windows), see http://stackoverflow.com/questions/3603047/find-the-end-of-stream-for-cin-ifstream
+  /*
+  {
+    cout << "reading from cin (ctrl-d/z to end or echo ... |):\n";
+    vector<string> coll;
+    copy(
+      istream_iterator<string>( cin ),
+      istream_iterator<string>(),
+      back_inserter( coll ) );
+    cout << "coll.size=" << coll.size() << endl;
+    copy(coll.begin(), coll.end(), ostream_iterator<string>(cout, "\n"));
+  }
+  */
+  /*
+  {
+    cout << "reading from cin (ctrl-d/z to end or echo ... |):\n";
+    int lineN = 0;
+    while (!cin.eof()) {
+      string line;
+      getline(cin, line);
+      cout << "read line:'" << line << "'" << endl;
+      ++lineN;
+    }
+    cout << "read lines: " << lineN << '\n';
+  }
+  */
+  // same test but using iofstream instead of cin:
+  // what about char encodings?
+  // http://stackoverflow.com/questions/5026555/c-how-to-write-read-ofstream-in-unicode-utf8
+  {
+    // the default ofstream mode is not binary?!
+    // a) 
+    ofstream("test.txt", ofstream::out | ofstream::binary) << "hello\nworld";
+    // b) use iostream.imbue:
+    /*
+    std::locale utf8_locale(std::locale(), new utf8cvt<false>);
+    {
+      ofstream out("test.txt");
+      out.imbue(utf8_locale);
+      out << "hello\nworld";
+    }
+    */
+    
+    auto inStream = ifstream("test.txt", ifstream::in | ifstream::binary);
+    //inStream.imbue(utf8_locale);
+    vector<string> lines;
+    while (!inStream.eof()) {
+      string line;
+      getline(inStream, line);
+      cout << "read line:'" << line << "'" << endl;
+      lines.push_back(line);
+    }
+
+    auto expectedLines = vector<string>{"hello", "world"};
+    assert(lines == expectedLines);
+
+    // while we're at it try some alternative ways to print vector content:
+    cout << "ostream_iterator:\n";
+    copy(lines.begin(), lines.end(), ostream_iterator<string>(cout, "\n"));
+    cout << "for_each:\n";
+    std::for_each(lines.cbegin(), lines.cend(), [](const string& line) { 
+      // note for_each passes a value, not an iter to the functor/lambda
+      cout << line << '\n'; 
+    });
+    cout << "for:\n";
+    for (const auto& line : lines)
+      cout << line << '\n';
+  }
+
+  stl_play_with_sort();
+
+  // bit fields: I first thought these were part of C++11, but they were
+  // available in C++98 alrdy. This code here has nothing to do with STL,
+  // but whatever.
+  // See also the much despised std::vector<bool> and also std::bitset<>.
+  {
+    struct S {
+      S() : a(2), b(2) {}
+      // you actually cannot decl bitfields in funcs, kinda inconsistent
+      char a : 3; // int works too
+      char b : 4;
+      // error: bitfield member cannot have an in-class initializer, so much
+      // for uniform initialization...
+    };
+    S s;
+    s.a = 9; // warning: implicit truncation from 'int' to bitfield changes value from 9 to 1
+    assert(s.a == (9 & 0x7));
+    static_assert(sizeof(S) == 1, ""); // not guaranteed
+    cout << "bitfield s bit value=0x" << hex 
+      << static_cast<int>(*reinterpret_cast<char*>(&s)) << endl;
+    cout << "decimal 16=" << 16 << endl; // the statefulness of cout can be annoying...
+    cout << dec;
+    // see http://stackoverflow.com/questions/1513625/c-how-to-reset-the-output-stream-manipulator-flags
+    // for boost::io::ios_all_saver guard.
+  }
+  {
+    vector<bool> vec = {true, false, true};
+    assert(vec.size() == 3);
+    assert(vec[1] == false);
+    vec[1] = true;
+    assert(std::all_of(vec.begin(), vec.end(), [](bool b) { return b; }));
+  }
+  {
+    //bitset<3> s = {true, false, true}; // no initializer_list accepted? lame
+    //  discussion is at https://groups.google.com/a/isocpp.org/forum/#!topic/std-discussion/VAFqmwOtqZo
+    bitset<3> s;
+    assert(s.none());
+    for (int i=0; i<s.size(); ++i)
+      s.set(i);
+    assert(s.all());
+  }
 }
+
+struct S {
+  string firstName;
+  string lastName;
+
+  /*
+  // whoa, I'm surprised you can decl a friend function within the class.
+  // But this func here doesnt really need to be a friend, so I pull it out.
+  friend ostream& operator <<(ostream& out, const S& s) {
+    out << s.firstName << ' ' << s.lastName;
+    return out;
+  }
+  */
+};
+
+ostream& operator <<(ostream& out, const S& s) {
+  out << s.firstName << ' ' << s.lastName;
+  return out;
+}
+
+// like std::less<T>, but for a member of T
+template <class T, class MemberT>
+struct lessForMember {
+  //typedef MemberT T::*member_ptr_t;
+  // or with C++11 'using' type alias:
+  using member_ptr_t = MemberT T::*;
+  lessForMember(member_ptr_t memberPtr_) : memberPtr(memberPtr_) {}
+  bool operator ()(const T& lhs, const T& rhs) {
+    cout << "cmp '" << lhs.*memberPtr << "' vs '" << rhs.*memberPtr << "'\n";
+    return lhs.*memberPtr < rhs.*memberPtr;
+  }
+  private:
+    member_ptr_t memberPtr;
+};
+
+void stl_play_with_sort() {
+  {
+    auto elems = vector<S>{
+      {"Robert", "Heinlein"}, 
+      {"Alfred", "Hitchcock"},
+      {"Otto", "Lilienthal"}
+    };
+    auto lessFirstName = [](const S& lhs, const S& rhs) {
+      return lhs.firstName < rhs.firstName;
+    };
+    auto lessLastName = [](const S& lhs, const S& rhs) {
+      return lhs.lastName < rhs.lastName;
+    };
+    cout << "sorted by firstName:\n";
+    std::sort(elems.begin(), elems.end(), lessFirstName);
+    copy(elems.begin(), elems.end(), ostream_iterator<S>(cout, "\n"));
+
+    // straightforward so far. Would be slightly less verbose if 
+    // we had a lessMember<S, member_ptr<S>> that maps S to a
+    // member and uses less on that. Overdesigned, just experimental:
+    cout << "sorted by lastName:\n";
+    std::sort(elems.begin(), elems.end(), lessForMember<S, string>(&S::lastName));
+    copy(elems.begin(), elems.end(), ostream_iterator<S>(cout, "\n"));
+
+    // Now let's say we want >=2 sort orders accessible at an given time.
+    // Instead of cloning the vector<T> and sorting each vector of clones
+    // we could sort a vector of ptrs or iterators:
+    vector<const S*> elemsSortedByFirst; // shared_ptr or boost::intrusive_ptr would be safer
+    elemsSortedByFirst.reserve(elems.size());
+    std::transform(elems.begin(), elems.end(), back_inserter(elemsSortedByFirst),
+      [](const S& elem) {
+        return &elem;
+    });
+    vector<const S*> elemsSortedByLast = elemsSortedByFirst; // shallow clone of vector
+    auto sortPtrByMember = [](string S::*memberPtr) {
+      return [memberPtr](const S* lhs, const S* rhs) {
+        return lhs->*memberPtr < rhs->*memberPtr;
+      };
+    };
+    std::sort(elemsSortedByFirst.begin(), elemsSortedByFirst.end(), 
+      sortPtrByMember(&S::firstName));
+    std::sort(elemsSortedByFirst.begin(), elemsSortedByFirst.end(), 
+      sortPtrByMember(&S::firstName));
+    cout << "ptrs sorted by first:\n";
+    for (const S* ptr : elemsSortedByFirst)
+      cout << *ptr << "\n";
+    cout << "ptrs sorted by last:\n";
+    for (const S* ptr : elemsSortedByLast)
+      cout << *ptr << "\n";
+  }
+}
+

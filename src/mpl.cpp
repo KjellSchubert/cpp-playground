@@ -129,6 +129,176 @@ void mpl_conditional() {
   static_assert(std::is_same<std::conditional<false, int, char>::type, char>::value, "");
 }
 
+// MPL uses sizeof for comparing yes_t and no_t for example, often using
+// sizeof on expressions (not just types).
+void func_void(int x);
+typedef char char10_t[10]; // terrible old C syntax imo, similar as for func ptr
+using char20_t = char[20]; // decent C++11 syntax 'type alias'
+using char30_t = char[30];
+char10_t& func2();
+char20_t& func2(int);
+char30_t& func2(float);
+
+
+void mpl_sizeof() {
+  struct S1 { char x[1]; };
+  struct S2 { char x[2]; };
+  static_assert(sizeof(S1) == 1, "");
+  static_assert(sizeof(S2) == 2, "");
+
+  using yes_t = char[1];
+  using no_t = char[2];
+  static_assert(sizeof(yes_t) != sizeof(no_t), "");
+  
+  // must not ask sizeof for void:
+  //static_assert(sizeof(void) == sizeof(void), "");
+
+  // See http://en.cppreference.com/w/cpp/language/sizeof "returns size in 
+  // bytes of the object representation of the type, that would be returned 
+  // by expression, if evaluated" ...
+  // "When applied to a reference type, the result is the size of the 
+  // referenced type."
+  static_assert(sizeof(func2()) == sizeof(char[10]), "");
+
+  // same expression with redundant decltype (redundant since sizeof alrdy 
+  // can deal with both types and expression's result types):
+  static_assert(sizeof(decltype(func2())) == sizeof(char[10]), "");
+
+  // again must not ask for sizeof if expression's result is void:
+  //   const int n = sizeof(func_void(123));
+  // but can use std::is_same & decltype:
+  static_assert(std::is_same<decltype(func2(123)), char20_t&>::value, "");
+}
+
+
+using int2char_func_ptr_t = char (*)(int);
+
+template<typename T>
+T func3(T x) { return x+1; };
+template<typename T>
+string func3(const vector<T>& vec) { return "hi"; }
+template<typename T>
+char20_t& func3(T*);
+template<typename T>
+char30_t& func3(typename T::type x); // weird, cannot ever be selected via type deduction
+
+void mpl_template_func_matching() {
+
+  struct S { using type = char; };
+
+  // call syntax with T specified explicitly:
+  assert(func3<int>(3) == 4);
+  assert(func3<int>(vector<int>{1,2}) == "hi");
+  static_assert(std::is_same<char30_t&, decltype(func3<S>(1)) >::value, "");
+
+  // syntax for implicit calls, compiler deduces T
+  assert(func3(3) == 4);
+  assert(func3(vector<int>{1,2}) == "hi");
+  //func3(S{}); // this won't compile since it matches first overload and S lacks operator+
+
+  int *p = nullptr;
+  static_assert(sizeof(char20_t) == sizeof(func3(p)), "");
+  static_assert(std::is_same<char20_t&, decltype(func3(p))>::value, "");
+}
+
+struct Base {};
+struct Derived : public Base {};
+
+// example for a template parameterized by type
+template <typename T>
+struct Container {
+  typedef T type;
+  typedef T* ptr_type;
+  static const bool didMatchFunc = true;
+};
+template<>
+struct Container<int2char_func_ptr_t> {
+  static const bool didMatchFunc = true;
+};
+template<>
+struct Container<int> {
+  static const bool didMatchFunc = false;
+  static const bool isInt = true;
+};
+// Specialization by exact class match: so this will match Container<Base>
+// but not Container<Derived>.
+template<>
+struct Container<Base> {
+  static const bool isBaseSpecialization = true;
+};
+// Specialization for T=vector<ElemType>
+template<class ElemType>
+class Container<vector<ElemType>> {
+  public:  // could have use struct instead, just testing...
+  static const bool isVectorSpecialization = true;
+};
+
+//template<> struct Container<2> // error: template argument for template type parameter must be a type
+
+// example for a template parameterized by a value (of type int)
+template <int val>
+struct TemplateWithIntValueParam {
+  static const int value = val * 10;
+};
+template <>
+struct TemplateWithIntValueParam<7> {
+  static const bool isSeven = true;
+};
+
+template<int2char_func_ptr_t func>
+struct TemplateWithFuncValueParam {
+  static char exec(int x) { // could also do operator()(int x)
+    return static_cast<char>('A' + x);
+  }
+};
+
+char someInt2charFunc(int x) { return 'a' + x; }
+
+void mpl_template_class_matching() {
+  auto c1 = Container<float>(); // matches 1st def
+  static_assert(std::is_same<Container<float>::ptr_type, float*>::value, "");
+  static_assert(Container<decltype(someInt2charFunc)>::didMatchFunc, "");
+  static_assert(Container<int>::isInt, "");
+  static_assert(Container<vector<float>>::isVectorSpecialization, "");
+  static_assert(Container<Base>::isBaseSpecialization, "");
+  //static_assert(!Container<Derived>::isBaseSpecialization, ""); // so the template
+    // doesnt match the derived type, but only the exact type.
+
+
+  static_assert(TemplateWithIntValueParam<9>::value == 90, "");
+  static_assert(TemplateWithIntValueParam<7>::isSeven, "");
+
+
+  auto tf = TemplateWithFuncValueParam<someInt2charFunc>();
+  int2char_func_ptr_t funcPtr = &tf.exec; // I was somewhat surprised this works (it's a static member)
+  int2char_func_ptr_t funcPtr2 = &TemplateWithFuncValueParam<someInt2charFunc>::exec;
+  // See http://stackoverflow.com/questions/18598417/why-does-stdis-function-evaluate-to-false-when-using-on-a-dereferenced-functio
+  static_assert(std::is_function<std::remove_pointer<int2char_func_ptr_t>::type>::value, "");
+  static_assert(std::is_function<std::remove_pointer<decltype(funcPtr)>::type>::value, "");
+  static_assert(std::is_function<std::remove_pointer<
+    decltype(&TemplateWithFuncValueParam<someInt2charFunc>::exec)>::type>::value, "");
+  assert(tf.exec(2) == 'C');
+  assert(funcPtr(2) == 'C');
+  assert(funcPtr2(2) == 'C');
+  static_assert(std::is_same<decltype(someInt2charFunc), char(int)>::value, "");
+  static_assert(std::is_same<decltype(&someInt2charFunc), char(*)(int)>::value, "");
+  static_assert(std::is_same<decltype(someInt2charFunc(1)), char>::value, "");
+
+  // the rest here is some preparation & asserts for HasMember_Clone below:
+  struct U { 
+    U* Clone();
+  };
+  using ExpectedCloneFuncPtrType = U* (U::*)();
+  static_assert(std::is_same<decltype(&U::Clone), ExpectedCloneFuncPtrType>::value, "");
+
+  using Yes = char[2];
+  using  No = char[1];
+  using ReturnType = std::conditional<
+    std::is_same<decltype(&U::Clone), ExpectedCloneFuncPtrType>::value,
+    Yes&,
+    No&>::type;
+  static_assert(std::is_same<ReturnType, Yes&>::value, "");
+}
 
 struct MyClonable {
   virtual MyClonable* Clone() =0;
@@ -148,23 +318,40 @@ struct MyClonable {
 // This code was copied from the latter, using C++11 decltype for a shorter
 // impl than the C++98 variant. So this type trait allows for duck-typing.
 // In any case we wouldn't need the macro if we'd wanna impl this for a
-// single member only:
+// single member only: TODO, doesnt work
+
 template < class T >
 class HasMember_Clone {
   using Yes = char[2];
   using  No = char[1];
   static_assert(sizeof(Yes) != sizeof(No), ""); // guaranteed by language spec
 
-  struct Fallback { int member; };
-  struct Derived : T, Fallback { };
-
+  // this is the mem func type that the expected Clone() func should have
+  // to match our requirements:
+  using ExpectedCloneFuncPtrType = T* (T::*)();
+  
+  // there here is were SFINAE is being exploited: the U::Clone should not
+  // result in a compiler error if U has no member Clone.
   template < class U > 
-  static No& test ( decltype(U::Clone)* );
+  static 
+    typename std::conditional<
+      std::is_same<decltype(&U::Clone), ExpectedCloneFuncPtrType>::value,
+      Yes&,
+      No&>::type
+    test ( decltype(U::Clone)* ); // void* should work also?
   template < typename U >  
-  static Yes& test ( U* );   
+  static No& test (...);  
+
+  // See http://en.cppreference.com/w/cpp/language/sizeof "returns size in 
+  // bytes of the object representation of the type, that would be returned 
+  // by expression, if evaluated" ...
+  // "When applied to a reference type, the result is the size of the 
+  // referenced type."
+  static_assert(sizeof(test<int>(nullptr)) == sizeof(No), "");
+  static_assert(sizeof(test<int>(123)) == sizeof(No), "");
   
 public:
-  static constexpr bool value = sizeof(test<Derived>(nullptr)) == sizeof(Yes);
+  static constexpr bool value = sizeof(test<T>(nullptr)) == sizeof(Yes); // could also std::is_same
 };
 
 
@@ -245,5 +432,8 @@ void play_with_mpl() {
   mpl_multiply();
   mpl_factorial();
   mpl_conditional();
+  mpl_sizeof();
+  mpl_template_class_matching();
+  mpl_template_func_matching();
   play_with_custom_type_traits();
 }

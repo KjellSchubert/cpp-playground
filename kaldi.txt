@@ -196,3 +196,4 @@ http://kaldi.sourceforge.net/tutorial_running.html and http://kaldi.sourceforge.
 >hg clone ...minitrain
 
 TODO: run minitrain with Kaldi, investigate rm/s4 failure
+TODO: read http://danielpovey.com/files/Lecture4.pdf

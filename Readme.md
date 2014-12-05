@@ -128,7 +128,16 @@ manager yet? Some links:
   [nuget: GoingNative 2013](http://channel9.msdn.com/Events/GoingNative/2013/Find-Build-Share-Use-Using-NuGet-for-C-and-Cpp-Libraries).
   I liked that he reused an existing repo (nuget's), but the choice of nuget probably killed it 
   as a potential cross-platform solution. 
-* the only working dep mgr I found is [node-gyp](https://github.com/TooTallNate/node-gyp)
+* one interesting dep mgr I found is [node-gyp](https://github.com/TooTallNate/node-gyp),
+  based on Chromium's [gyp](https://code.google.com/p/gyp/). Afaik this doesn't really allow
+  you to express cross-projects deps between C++ modules/packages (e.g. that modulaA
+  depends on boost 1.56+, and moduleB depends on moduleA).
+* C++ std module proposals come and go, e.g. see 
+  [n4047](http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4047.pdf). Not sure 
+  what the odds are that this will be accepted for C++17, probably not great. See also
+  Clangs (incompatible) [module concept](http://clang.llvm.org/docs/Modules.html) with
+  comments [here](http://isocpp.org/blog/2014/05/n4047). For Clang a module seems more 
+  like a set of PCHs (which may be a good thing). 
 * we use C++ libs stored in a local Artifactory and downloaded via ivy.xml, but this
   won't scale across companies and pushing the 3rd party C++ libs into Artifactory 
   is still labor-intensive & awkward.

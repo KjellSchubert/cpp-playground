@@ -640,6 +640,47 @@ void play_with_stl() {
       s.set(i);
     assert(s.all());
   }
+
+  // some tests around ctor & dtor exceptions, along the lines of
+  // http://www.gotw.ca/gotw/066.htm
+  {
+    struct A_ctorThrows {
+      A_ctorThrows() {
+        throw std::runtime_error("ctor ex");
+      }
+    };
+    struct A_dtorThrows {
+      ~A_dtorThrows() {
+        throw std::runtime_error("dtor ex");
+      }
+    };
+
+    struct S1 {
+      S1() 
+        try // funky syntax btw! try outside of code block
+          : a()
+        {
+        }
+        catch (...) {
+          cout << "S::S() caught ctor ex\n";
+          // ex will be auto-rethrown here (if we dont throw our own)
+        }
+      A_ctorThrows a;
+    };
+
+    bool didCatch = false;
+    bool objLived = false;
+    try {
+      S1 {};
+      objLived = true;
+    }
+    catch (const exception& ex) {
+      cout << "S1 construction ex: " << ex.what() << '\n';
+      didCatch = true;
+    }
+    assert(didCatch);
+    assert(!objLived);
+  }
 }
 
 struct S {

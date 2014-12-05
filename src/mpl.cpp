@@ -429,6 +429,8 @@ class HasCloneMethod {
 #endif
 
 void play_with_mpl() {
+
+
   mpl_multiply();
   mpl_factorial();
   mpl_conditional();

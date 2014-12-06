@@ -5,6 +5,17 @@ These are personal notes & experiments & cheat sheets on a few C++11 & C++14 cha
 Critical books: all the Scott Meyers ones (TODO: the STL one and the C++11 one)
 Good summary of new C++11 features: http://www.aristeia.com/C++11.html
 
+Sample build instructions
+---
+
+* with gyp & make: gyp play.gyp --depth=. ; make
+* with gyp & ninja-build: gyp play.gyp --depth=. -f ninja ; ninja out/Default.
+  With ninja clang err msgs no longer showed colors in my terminal, didnt like
+  that too much. Gonna reconsider using ninja for very large projects.
+* to clean: rm -rf out
+
+TODO: fix cloud9 IDE build errors (around locales? saw similar errors in Centos 6)
+
 Move c'tors
 ---
 

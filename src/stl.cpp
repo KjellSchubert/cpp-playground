@@ -662,24 +662,112 @@ void play_with_stl() {
         {
         }
         catch (...) {
-          cout << "S::S() caught ctor ex\n";
+          cout << "S1::S1() caught ctor ex\n";
           // ex will be auto-rethrown here (if we dont throw our own)
         }
       A_ctorThrows a;
     };
 
-    bool didCatch = false;
-    bool objLived = false;
+    {
+      bool didCatch = false;
+      bool objLived = false;
+      try {
+        S1 {};
+        objLived = true;
+      }
+      catch (const exception& ex) {
+        cout << "S1 construction ex: " << ex.what() << '\n';
+        didCatch = true;
+      }
+      assert(didCatch);
+      assert(!objLived);
+    }
+
+    // What if the ex does not encompass member construction lines ': member{}'?
+    // Can we catch & suppress the ex then? Yes:
+    struct S3 {
+      S3() {
+        cout << "S3::S3 enter\n";
+        try {
+          throw runtime_error("foo");
+        }
+        catch (...) {
+          cout << "S3::S3 caught & suppressed ex\n";
+          // no forced retrow here
+        }
+      }
+    };
+    {
+      bool didCatch = false;
+      bool objLived = false;
+      try {
+        S3 {};
+        objLived = true;
+      }
+      catch (const exception& ex) {
+        cout << "S3 construction ex: " << ex.what() << '\n';
+        didCatch = true;
+      }
+      assert(!didCatch);
+      assert(objLived);
+    }
+
+    // this here answers the question if you can catch & suppress an exc
+    // thrown by a dtor: you can catch it but not suppress it, similar
+    // as for the S1 case. More importantly for the dtor case you'll get
+    // an aborted process with msg:
+    //   terminating with uncaught exception of type std::runtime_error: dtor ex
+    #if 0 // only enable if you're OK with the process terminating here
+    struct S2 {
+      A_dtorThrows a;
+    };
+    {
+      bool didGetPastBlock = false;
+      bool didThrow = false;
+      try
+      {
+        {
+          cout << "S2::S2 pending\n";
+          //S2 {}; // in this case wont wont even get the cout below,
+                   // since the temporary is instantly destroyed
+          S2 s {};
+          cout << "S2 dtor call pending\n";
+        }
+        didGetPastBlock = true;
+      }
+      catch (const exception& ex) {
+        // we never even get here, unlike in the ctor case
+        cout << "S2 got expected dtor exc" << ex.what() << "\n";
+        didThrow = true;
+      }
+      // never shoulg get here
+      assert(false);
+    }
+    #endif
+
+    #if 0 // only enable if you're OK with the process terminating here
+    // so we called terminate if we got a dtor exc during stack unwinding.
+    // There's one case were an exception during a dtor call won't call
+    // terminate: an explicit dtor call:
+    using Obj = A_dtorThrows;
+    // http://stackoverflow.com/questions/16711697/is-there-any-use-for-unique-ptr-with-array
+    unique_ptr<char[]> memForObj { new char[sizeof(Obj)] }; // RAII
+    Obj* obj = new(reinterpret_cast<Obj*>(memForObj.get())) Obj(); // placement new
     try {
-      S1 {};
-      objLived = true;
+      cout << "~Obj() pending\n";
+      obj->~Obj(); // rare thing: only called by smart ptrs and containers and such
+      assert(false);
     }
     catch (const exception& ex) {
-      cout << "S1 construction ex: " << ex.what() << '\n';
-      didCatch = true;
+      // we never even get here
+      assert(false);
+      cout << "caught ex thrown by explicit dtor call" << ex.what() << "\n";
     }
-    assert(didCatch);
-    assert(!objLived);
+    assert(false);
+    // we never even get here
+    // at this point obj would be in a weird state: some of its members
+    // destructed, others still live. So we'd likely leak something here.
+    #endif
   }
 }
 

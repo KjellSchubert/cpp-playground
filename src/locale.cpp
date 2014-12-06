@@ -35,5 +35,5 @@ void play_with_locale() {
   //auto en_US_utf8 = std::locale("en_US.UTF-8");
   std::setlocale(LC_ALL, "en_US.UTF-8"); // not pretty that we have to call this just to be able to isUpper()
   //fails, needs German local for A-umlaut? assert(std::isupper(u'\u00c4'));
-  assert(std::iswupper(u'\u00c4'));
+  //worked on ubuntu, failed in cloud9 shell: assert(std::iswupper(u'\u00c4'));
 }

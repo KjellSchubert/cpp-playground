@@ -374,7 +374,18 @@ void play_with_stl() {
     std::ofstream("text.txt") << data;
 
     std::wifstream fin("text.txt");
-    fin.imbue(std::locale("en_US.UTF-8"));
+    
+    // I added these lines after fin.imbue failed on cloud9 IDE exec.
+    // TODO: figure out why in Cloud9 IDE the utf8 locale construction
+    // fails.
+    cout << "LC_ALL: " << setlocale(LC_ALL, NULL) << endl;
+    cout << "LC_CTYPE: " << setlocale(LC_CTYPE, NULL) << endl;
+    try {
+      fin.imbue(std::locale("en_US.UTF-8"));
+    }
+    catch (const exception& ex) {
+      cout << "ignoring istream.imbue exception: " << ex.what() << '\n';
+    }
     std::cout << "The UTF-8 file contains the following UCS4 aka utf32 code points: \n";
     for (wchar_t c; fin >> c; )
        std::cout << "U+" << std::hex << std::setw(4) << std::setfill('0') << c << '\n';

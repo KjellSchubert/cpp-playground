@@ -14,8 +14,6 @@ Sample build instructions
   that too much. Gonna reconsider using ninja for very large projects.
 * to clean: rm -rf out
 
-TODO: fix cloud9 IDE build errors (around locales? saw similar errors in Centos 6)
-
 Move c'tors
 ---
 

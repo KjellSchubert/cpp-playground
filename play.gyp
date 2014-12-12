@@ -33,6 +33,7 @@
                '-stdlib=libc++'
             ],
             'sources': [
+                'src/general.cpp',
                 'src/cpp11.cpp',
                 'src/locale.cpp',
                 'src/main.cpp',

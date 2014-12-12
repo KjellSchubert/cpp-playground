@@ -5,6 +5,7 @@
 using namespace std;
 
 // pull in main entry points from the other files in src/
+void play_general();
 void play_with_cpp11();
 void play_with_locale();
 void play_with_move();
@@ -16,6 +17,7 @@ void variadic_template_func();
 int main() {
   try {
 		cout << "entering main()" << endl;
+    play_general();
     play_with_cpp11();
     play_with_locale();
     variadic_template_func();

@@ -9,6 +9,9 @@
             'include_dirs': [
                 'include/'
             ],
+            'dependencies': [
+                '../../dependencies/lib2/lib2.gyp:lib2'
+            ],
             'all_dependent_settings': {
                 'defines': [
                     'SOME_LIB1_DEFINE=77',

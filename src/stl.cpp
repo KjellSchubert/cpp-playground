@@ -657,11 +657,17 @@ void play_with_stl() {
   {
     struct A_ctorThrows {
       A_ctorThrows() {
+        cout << "A_ctorThrows() is about to throw now\n";
         throw std::runtime_error("ctor ex");
       }
     };
     struct A_dtorThrows {
-      ~A_dtorThrows() {
+      // note that in C++11 dtors are the only funcs that are declared noexcept
+      // aka noexcept(true) by default. So if want you dtor to be able to throw
+      // without calling terminate() then declare it noexcept(false).
+      // See Scott Meyers EMC++ item 14 (noexcept).
+      ~A_dtorThrows() noexcept(false) {
+        cout << "~A_dtorThrows() is about to throw now\n";
         throw std::runtime_error("dtor ex");
       }
     };
@@ -727,8 +733,8 @@ void play_with_stl() {
     // thrown by a dtor: you can catch it but not suppress it, similar
     // as for the S1 case. More importantly for the dtor case you'll get
     // an aborted process with msg:
+    // P.S.: you actually can catch the ex if you decl the dtor noexcept(false)
     //   terminating with uncaught exception of type std::runtime_error: dtor ex
-    #if 0 // only enable if you're OK with the process terminating here
     struct S2 {
       A_dtorThrows a;
     };
@@ -751,34 +757,46 @@ void play_with_stl() {
         cout << "S2 got expected dtor exc" << ex.what() << "\n";
         didThrow = true;
       }
-      // never shoulg get here
-      assert(false);
+      assert(didThrow);
+    }
+    
+    #if 0 // this test will terminate the process
+    // test exceptions thrown during stack unwinding: these terminate the 
+    // process always, no matter if the dtor was tagged as noexcept(false) or
+    // not
+    auto doomedFunc = []() {
+      cout << "doomedFunc enters\n";
+      A_dtorThrows a; // its dtor will throw
+      cout << "doomedFunc past ctor A_dtorThrows, about to throw ex, should abort\n";
+      throw runtime_error("doomed because of dtor ex!");
+      cout << "we should never get here" << &a << "\n";
+    };
+    try {
+      doomedFunc();
+    }
+    catch (const exception& ex) {
+      cout << "doomedFunc threw ex: " << ex.what() << "\n";
     }
     #endif
 
-    #if 0 // only enable if you're OK with the process terminating here
-    // so we called terminate if we got a dtor exc during stack unwinding.
-    // There's one case were an exception during a dtor call won't call
-    // terminate: an explicit dtor call:
+    // This is some funky placement new leftover experiment, testing explicit
+    // dtor calls, as a smart_ptr impl may call the dtor.
     using Obj = A_dtorThrows;
     // http://stackoverflow.com/questions/16711697/is-there-any-use-for-unique-ptr-with-array
     unique_ptr<char[]> memForObj { new char[sizeof(Obj)] }; // RAII
+    // WARNING: the placement new yields an exception, unsure why
     Obj* obj = new(reinterpret_cast<Obj*>(memForObj.get())) Obj(); // placement new
     try {
       cout << "~Obj() pending\n";
       obj->~Obj(); // rare thing: only called by smart ptrs and containers and such
-      assert(false);
+      assert(false); // never should get here since obj dtor throws
     }
     catch (const exception& ex) {
-      // we never even get here
-      assert(false);
       cout << "caught ex thrown by explicit dtor call" << ex.what() << "\n";
     }
-    assert(false);
-    // we never even get here
-    // at this point obj would be in a weird state: some of its members
-    // destructed, others still live. So we'd likely leak something here.
-    #endif
+    // at this point obj is in a weird state: some of its members are
+    // destructed, others are still live. So we'd likely leak something here.
+    // In any case the runtime doesnt abort the process in this case.
   }
 }
 

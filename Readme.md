@@ -112,6 +112,8 @@ I/O libs:
 * boost::asio, unsure about interop with other langugages
 
 Random links:
+* http://herbsutter.com/gotw/ (old one at http://www.gotw.ca/gotw/)
+* https://akrzemi1.wordpress.com/
 * [Going Native 2013](http://channel9.msdn.com/Events/GoingNative/2013)
 * [Going Native 2012](http://channel9.msdn.com/Events/GoingNative/GoingNative-2012)
 * [Google C++ Style Guide](http://google-styleguide.googlecode.com/svn/trunk/cppguide.html): their EH stance

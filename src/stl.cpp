@@ -735,6 +735,8 @@ void play_with_stl() {
     // an aborted process with msg:
     // P.S.: you actually can catch the ex if you decl the dtor noexcept(false)
     //   terminating with uncaught exception of type std::runtime_error: dtor ex
+    // Details at https://akrzemi1.wordpress.com/2013/08/20/noexcept-destructors/
+    // (with C++11 changes to dealing with exceptions thrown by dtors)
     struct S2 {
       A_dtorThrows a;
     };
